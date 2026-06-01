@@ -22,15 +22,12 @@ def require_kiosk_auth(f):
     return decorated_function
 
 # Okta proxy authentication (production)
-OKTA_HEADER = os.getenv('OKTA_HEADER', '')  # Set to 'X-Auth-Proxy-Username' in production
 
 # Admin users authorized to access admin panel
 # I took this out, going to use admin database
 
 def get_authenticated_user():
-    """Get authenticated user from proxy header (if configured)"""
-    if OKTA_HEADER:
-        return request.headers.get(OKTA_HEADER)
+    """Get authenticated user from session"""
     return None
 
 def is_admin_user(username):
@@ -204,15 +201,11 @@ def index():
                 for text in re.split('([0-9]+)', item['vehicle_name'])]
     
     # Group by category with natural sorting
-    squad_cars = sorted([k for k in formatted_keys if k['category'] == 'Squad Cars'], 
+    keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], 
                        key=natural_sort_key)
-    specialized_vehicles = sorted([k for k in formatted_keys if k['category'] == 'Specialized Services Vehicles'],
+    vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'],
                          key=natural_sort_key)
-    cid_vehicles = sorted([k for k in formatted_keys if k['category'] == 'CID Vehicles'], 
-                         key=natural_sort_key)
-    other_vehicles = sorted([k for k in formatted_keys if k['category'] == 'Other Vehicles'], 
-                       key=natural_sort_key)
-    # Equipment and Key Rings: Sort by checked-out status first, then alphabetically
+    # Equipment, Tools, Other: Sort by checked-out status first, then alphabetically
     def status_then_name_sort(item):
         # Return tuple: (0 if checked out, 1 if available), then natural sort key
         is_available = 0 if item.get('checkout_id') else 1
@@ -222,18 +215,18 @@ def index():
     
     equipment = sorted([k for k in formatted_keys if k['category'] == 'Equipment'], 
                       key=status_then_name_sort)
-    key_rings = sorted([k for k in formatted_keys if k['category'] == 'Key Rings'], 
+    tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], 
+                       key=status_then_name_sort)
+    other = sorted([k for k in formatted_keys if k['category'] == 'Other'], 
                        key=status_then_name_sort)
 
     
     return render_template('index.html',
-                      squad_cars=squad_cars,
-                      specialized_vehicles=specialized_vehicles,
-                      cid_vehicles=cid_vehicles,
-                      other_vehicles=other_vehicles,
+                      keys=keys,
+                      vehicles=vehicles,
                       equipment=equipment,
-                      key_rings=key_rings,
-                      okta_mode=bool(OKTA_HEADER))
+                      tools=tools,
+                      other=other)
 def get_current_status():
     """Get current equipment status - shared logic for API and WebSocket broadcasts"""
     conn = get_db()
@@ -359,15 +352,11 @@ def get_current_status():
         return [int(text) if text.isdigit() else text.lower() 
                 for text in re.split('([0-9]+)', item['vehicle_name'])]
     
-    squad_cars = sorted([k for k in formatted_keys if k['category'] == 'Squad Cars'], 
+    keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], 
                        key=natural_sort_key)
-    specialized_vehicles = sorted([k for k in formatted_keys if k['category'] == 'Specialized Services Vehicles'],
+    vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'],
                          key=natural_sort_key)
-    cid_vehicles = sorted([k for k in formatted_keys if k['category'] == 'CID Vehicles'], 
-                         key=natural_sort_key)
-    other_vehicles = sorted([k for k in formatted_keys if k['category'] == 'Other Vehicles'], 
-                       key=natural_sort_key)
-    # Equipment and Key Rings: Sort by checked-out status first, then alphabetically
+    # Equipment, Tools, Other: Sort by checked-out status first, then alphabetically
     def status_then_name_sort(item):
         # Return tuple: (0 if checked out, 1 if available), then natural sort key
         is_available = 0 if item.get('checkout_id') else 1
@@ -377,16 +366,17 @@ def get_current_status():
     
     equipment = sorted([k for k in formatted_keys if k['category'] == 'Equipment'], 
                       key=status_then_name_sort)
-    key_rings = sorted([k for k in formatted_keys if k['category'] == 'Key Rings'], 
+    tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], 
+                       key=status_then_name_sort)
+    other = sorted([k for k in formatted_keys if k['category'] == 'Other'], 
                        key=status_then_name_sort)
     
     return {
-        'squad_cars': squad_cars,
-        'specialized_vehicles': specialized_vehicles,
-        'cid_vehicles': cid_vehicles,
-        'other_vehicles': other_vehicles,
+        'keys': keys,
+        'vehicles': vehicles,
         'equipment': equipment,
-        'key_rings': key_rings,
+        'tools': tools,
+        'other': other,
         'active_reservations': formatted_reservations
     }
 
@@ -762,8 +752,8 @@ def api_search_equipment():
         conn.close()
         return {'error': str(e)}, 500
 
-# Admin login - only available if ADMIN_PASSWORD is set AND not in OKTA mode
-if ADMIN_PASSWORD and not OKTA_HEADER:
+# Admin login - only available if ADMIN_PASSWORD is set
+if ADMIN_PASSWORD:
     @app.route('/admin/login', methods=['GET', 'POST'])
     def admin_login():
         """Admin login page (development/emergency use only)"""
@@ -843,66 +833,6 @@ def api_bulk_checkout():
             'checked_out': checked_out,
             'errors': errors
         }, 201
-        
-    except Exception as e:
-        conn.close()
-        return {'error': str(e)}, 500
-
-@app.route('/api/barns_transfer', methods=['POST'])
-@require_kiosk_auth
-def api_barns_transfer():
-    """Transfer a vehicle to The Barns"""
-    data = request.get_json()
-    
-    fob_id = data.get('fob_id')  # key_fobs table ID
-    kiosk_id = data.get('kiosk_id', 'station')
-    
-    if not fob_id:
-        return {'error': 'Missing fob_id'}, 400
-    
-    chicago_tz = pytz.timezone('America/Chicago')
-    conn = get_db()
-    
-    try:
-        # Get or create The Barns user
-        barns_user = conn.execute('''
-            SELECT * FROM users WHERE card_id = ? COLLATE NOCASE
-        ''', ('BARNS',)).fetchone()
-        
-        if not barns_user:
-            conn.execute('''
-                INSERT INTO users (card_id, first_name, last_name, is_active)
-                VALUES (?, ?, ?, ?)
-            ''', ('BARNS', 'The', 'Barns', 1))
-            conn.commit()
-            barns_user = conn.execute('''
-                SELECT * FROM users WHERE card_id = ? COLLATE NOCASE
-            ''', ('BARNS',)).fetchone()
-        
-        # Check current checkout status
-        current_checkout = conn.execute('''
-            SELECT * FROM checkouts WHERE fob_id = ? AND checked_in_at IS NULL
-        ''', (fob_id,)).fetchone()
-        
-        if current_checkout:
-            # Check in from current user
-            conn.execute('''
-                UPDATE checkouts SET checked_in_at = ? WHERE id = ?
-            ''', (datetime.now(chicago_tz).isoformat(), current_checkout['id']))
-        
-        # Check out to The Barns
-        conn.execute('''
-            INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at)
-            VALUES (?, ?, ?, ?)
-        ''', (barns_user['id'], fob_id, kiosk_id, datetime.now(chicago_tz).isoformat()))
-        
-        conn.commit()
-        conn.close()
-        
-        # Broadcast update
-        socketio.emit('status_update', get_current_status())
-        
-        return {'status': 'success', 'message': 'Transferred to The Barns'}, 200
         
     except Exception as e:
         conn.close()

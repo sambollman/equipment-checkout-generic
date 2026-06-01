@@ -1,78 +1,36 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Edit Equipment/Vehicle</title>
+    <title>Edit Equipment</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f0f0f0;
-        }
-        .form-container {
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
-            max-width: 500px;
-            margin: 0 auto;
-        }
-        h1 {
-            color: #333;
-        }
-        label {
-            display: block;
-            margin-top: 15px;
-            font-weight: bold;
-        }
-        input, select {
-            width: 100%;
-            padding: 10px;
-            margin-top: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        button {
-            margin-top: 20px;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        .save-btn {
-            background-color: #4CAF50;
-            color: white;
-        }
-        .cancel-btn {
-            background-color: #666;
-            color: white;
-            margin-left: 10px;
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f0f0f0; }
+        .form-container { background: white; padding: 30px; border-radius: 8px; max-width: 500px; margin: 0 auto; }
+        h1 { color: #333; }
+        label { display: block; margin-top: 15px; font-weight: bold; }
+        input, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { margin-top: 20px; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .save-btn { background-color: #4CAF50; color: white; }
+        .cancel-btn { background-color: #666; color: white; margin-left: 10px; }
     </style>
 </head>
 <body>
     <div class="form-container">
-        <h1>Edit Equipment/Vehicle</h1>
+        <h1>Edit Equipment</h1>
         <form method="POST">
-            <label>Fob ID:</label>
+            <label>Item ID:</label>
             <input type="text" name="fob_id" value="{{ fob.fob_id }}" readonly style="background: #f5f5f5;">
-            
             <label>Name:</label>
             <input type="text" name="vehicle_name" value="{{ fob.vehicle_name }}" required>
-            
             <label>Category:</label>
             <select name="category">
-                <option value="Squad Cars" {% if fob.category == 'Squad Cars' %}selected{% endif %}>Squad Cars</option>
-                <option value="Specialized Services Vehicles" {% if fob.category == 'Specialized Services Vehicles' %}selected{% endif %}>Specialized Services Vehicles</option>
-                <option value="CID Vehicles" {% if fob.category == 'CID Vehicles' %}selected{% endif %}>CID Vehicles</option>
-                <option value="Other Vehicles" {% if fob.category == 'Other Vehicles' %}selected{% endif %}>Other Vehicles</option>
+                <option value="Keys" {% if fob.category == 'Keys' %}selected{% endif %}>Keys</option>
+                <option value="Vehicles" {% if fob.category == 'Vehicles' %}selected{% endif %}>Vehicles</option>
                 <option value="Equipment" {% if fob.category == 'Equipment' %}selected{% endif %}>Equipment</option>
-                <option value="Key Rings" {% if fob.category == 'Key Rings' %}selected{% endif %}>Key Rings</option>
+                <option value="Tools" {% if fob.category == 'Tools' %}selected{% endif %}>Tools</option>
+                <option value="Other" {% if fob.category == 'Other' %}selected{% endif %}>Other</option>
             </select>
-            
             <label>Location:</label>
             <input type="text" name="location" value="{{ fob.location }}" required>
-            
             <button type="submit" class="save-btn">Save Changes</button>
             <a href="/admin#fobs"><button type="button" class="cancel-btn">Cancel</button></a>
         </form>

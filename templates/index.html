@@ -374,22 +374,20 @@ body {
         </label>
     </div>
     <h1>Vehicle & Equipment Checkout System</h1>
-    <a href="{% if okta_mode %}/admin{% else %}/admin/login{% endif %}" class="admin-link">Admin</a>
+    <a href="/admin/login" class="admin-link">Admin</a>
 
      
     <div class="tab-container">
-        <button class="tab active" data-category="Squad Cars">🚓 Squad Cars</button>
-        <button class="tab" data-category="CID Vehicles">🚔 CID Vehicles</button>
-        <button class="tab" data-category="Specialized Services Vehicles">🚙 Specialized Services Vehicles</button>
-        <button class="tab" data-category="Other Vehicles">🚗 Other Vehicles</button>
+        <button class="tab active" data-category="Keys">🔑 Keys</button>
+        <button class="tab" data-category="Vehicles">🚗 Vehicles</button>
         <button class="tab" data-category="Equipment">🔧 Equipment</button>
-        <button class="tab" data-category="Key Rings">🔑 Key Rings</button>
+        <button class="tab" data-category="Tools">🛠️ Tools</button>
+        <button class="tab" data-category="Other">📦 Other</button>
     </div>
 
-    <!-- Squad Cars Tab -->
-<div class="tab-content active" id="Squad Cars-content">
+    <div class="tab-content active" id="Keys-content">
     <div class="grid">
-        {% for key in squad_cars %}
+        {% for key in keys %}
         <div class="key-card {% if key.checkout_id %}checked-out{% else %}available{% endif %}">
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
@@ -427,10 +425,9 @@ body {
     </div>
 </div>
 
-<!-- Specialized Services Vehicles Tab -->
-<div class="tab-content" id="Specialized Services Vehicles-content">
+<div class="tab-content" id="Vehicles-content">
     <div class="grid">
-        {% for key in specialized_vehicles %}
+        {% for key in vehicles %}
         <div class="key-card {% if key.checkout_id %}checked-out{% else %}available{% endif %}">
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
@@ -468,89 +465,6 @@ body {
     </div>
 </div>
 
-<!-- CID Vehicles Tab -->
-<div class="tab-content" id="CID Vehicles-content">
-    <div class="grid">
-        {% for key in cid_vehicles %}
-        <div class="key-card {% if key.checkout_id %}checked-out{% else %}available{% endif %}">
-            <div class="vehicle-name">{{ key.vehicle_name }}</div>
-            {% if key.checkout_id %}
-                <div class="status checked-out">
-                    <strong>Checked out to:</strong><br>
-                    <span class=""checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
-                    <small>Since {{ key.checked_out_at }}</small>
-                </div>
-            {% else %}
-                <div class="status available">
-                    ✓ Available
-                </div>
-            {% endif %}
-            {% if key.reservation %}
-                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
-                    📅 Reserved<br>
-                    <small>
-                        {% if key.reservation.first_name %}
-                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
-                        {% elif key.reservation.reserved_for_name %}
-                            For: {{ key.reservation.reserved_for_name }}<br>
-                        {% endif %}
-                        Time: {{ key.reservation.reserved_datetime }}<br>
-                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
-                    </small>
-                </div>
-            {% endif %}
-            {% if key.note %}
-                <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
-                    ⚠️ Note: {{ key.note.note_text }}
-                </div>
-            {% endif %}
-        </div>
-        {% endfor %}
-    </div>
-</div>
-
-<!-- Other Vehicles Tab -->
-<div class="tab-content" id="Other Vehicles-content">
-    <div class="grid">
-        {% for key in other_vehicles %}
-        <div class="key-card {% if key.checkout_id %}checked-out{% else %}available{% endif %}">
-            <div class="vehicle-name">{{ key.vehicle_name }}</div>
-            {% if key.checkout_id %}
-                <div class="status checked-out">
-                    <strong>Checked out to:</strong><br>
-                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
-                    <small>Since {{ key.checked_out_at }}</small>
-                </div>
-            {% else %}
-                <div class="status available">
-                    ✓ Available
-                </div>
-            {% endif %}
-            {% if key.reservation %}
-                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
-                    📅 Reserved<br>
-                    <small>
-                        {% if key.reservation.first_name %}
-                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
-                        {% elif key.reservation.reserved_for_name %}
-                            For: {{ key.reservation.reserved_for_name }}<br>
-                        {% endif %}
-                        Time: {{ key.reservation.reserved_datetime }}<br>
-                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
-                    </small>
-                </div>
-            {% endif %}
-            {% if key.note %}
-                <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
-                    ⚠️ Note: {{ key.note.note_text }}
-                </div>
-            {% endif %}
-        </div>
-        {% endfor %}
-    </div>
-</div>
-
-<!-- Equipment Tab -->
 <div class="tab-content" id="Equipment-content">
     <div class="grid">
         {% for key in equipment %}
@@ -591,10 +505,9 @@ body {
     </div>
 </div>
 
-<!-- Key Rings Tab -->
-<div class="tab-content" id="Key Rings-content">
+<div class="tab-content" id="Tools-content">
     <div class="grid">
-        {% for key in key_rings %}
+        {% for key in tools %}
         <div class="key-card {% if key.checkout_id %}checked-out{% else %}available{% endif %}">
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
@@ -632,11 +545,9 @@ body {
     </div>
 </div>
 
-    
-    <div class="tab-content" id="Equipment-content">    
-    <!-- Card View -->
-    <div class="grid" id="equipmentCards">
-        {% for key in equipment %}
+<div class="tab-content" id="Other-content">
+    <div class="grid">
+        {% for key in other %}
         <div class="key-card {% if key.checkout_id %}checked-out{% else %}available{% endif %}">
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
@@ -650,10 +561,30 @@ body {
                     ✓ Available
                 </div>
             {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    ⚠️ Note: {{ key.note.note_text }}
+                </div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
-    
+</div>
+
     <script>
         // Dark mode toggle functionality
         const toggle = document.getElementById('darkModeToggle');
@@ -708,12 +639,11 @@ body {
         // Fetch and update display
         function updateDisplay(data) {
             // Update each category tab
-            updateSection('Squad Cars', data.squad_cars);
-            updateSection('Specialized Services Vehicles', data.specialized_vehicles);
-            updateSection('CID Vehicles', data.cid_vehicles);
-            updateSection('Other Vehicles', data.other_vehicles);
+            updateSection('Keys', data.keys);
+            updateSection('Vehicles', data.vehicles);
             updateSection('Equipment', data.equipment);
-            updateSection('Key Rings', data.key_rings);
+            updateSection('Tools', data.tools);
+            updateSection('Other', data.other);
         }
         
         function updateSection(category, items) {

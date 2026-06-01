@@ -29,7 +29,6 @@ class KioskGUI:
         self.replace_mode = None # 'card' or 'fob'
         self.replace_item = None # The item being replaced
         self.note_mode = False
-        self.barns_scan_mode = False
         self.bulk_checkout_mode = False
         self.bulk_items = []
 
@@ -52,7 +51,7 @@ class KioskGUI:
         # Title at top (outside container)
         self.title_label = tk.Label(
             self.root,
-            text="VEHICLE & EQUIPMENT CHECKOUT",
+            text="EQUIPMENT CHECKOUT SYSTEM",
             font=self.title_font,
             fg='white',
             bg='black'
@@ -104,7 +103,6 @@ class KioskGUI:
         self.replace_mode = None
         self.replace_item = None
         self.note_mode = False
-        self.barns_scan_mode = False
         
         # Return to welcome
         self.show_welcome()
@@ -258,29 +256,6 @@ class KioskGUI:
             if response.status_code == 201:
                 data = response.json()
                 return True, data
-            else:
-                error_msg = response.json().get('error', 'Unknown error')
-                return False, error_msg
-        except Exception as e:
-            if self.is_network_error(e):
-                self.show_offline_screen()
-                return False, None
-            return False, str(e)
-    
-    def barns_transfer_api(self, fob_id):
-        """Transfer to The Barns via API"""
-        try:
-            response = requests.post(
-                f'{SERVER_URL}/api/barns_transfer',
-                auth=(KIOSK_USER, KIOSK_PASS),
-                json={
-                    'fob_id': fob_id,
-                    'kiosk_id': self.kiosk_id
-                },
-                timeout=5
-            )
-            if response.status_code == 200:
-                return True, None
             else:
                 error_msg = response.json().get('error', 'Unknown error')
                 return False, error_msg
@@ -928,19 +903,7 @@ class KioskGUI:
             command=self.start_bulk_checkout
         )
         bulk_btn.pack(side='left', padx=10)
-    
-        # Barns Transfer button
-        barns_btn = tk.Button(
-            button_frame1,
-            text="🔧 Barns Transfer",
-            font=font.Font(size=16, weight='bold'),
-            bg='#795548',
-            fg='white',
-            width=18,
-            height=2,
-            command=self.barns_transfer
-        )
-        barns_btn.pack(side='left', padx=10)
+
     
         # Button container - Second row
         button_frame2 = tk.Frame(self.message_frame, bg='black')
@@ -1363,194 +1326,6 @@ class KioskGUI:
     def replace_card(self):
         """Button handler for replacing card"""
         self.start_replace_card_mode()
-
-    def barns_transfer(self):
-        """Transfer vehicle to The Barns"""
-        from tkinter import Toplevel, Button, Label, Listbox, Scrollbar, SINGLE
-        
-        # Ask if they have the fob
-        result = [None]
-        
-        def on_yes():
-            result[0] = True
-            dialog.destroy()
-        
-        def on_no():
-            result[0] = False
-            dialog.destroy()
-        
-        dialog = Toplevel(self.root)
-        dialog.title("Barns Transfer")
-        dialog.geometry("700x400")
-        dialog.configure(bg='white')
-        dialog.transient(self.root)
-        dialog.grab_set()
-        
-        Label(dialog, text="🏭", font=font.Font(size=80),
-              bg='white', fg='#795548').pack(pady=(30, 20))
-        
-        Label(dialog, text="Do you have the vehicle fob with you?", 
-              font=font.Font(size=20, weight='bold'), bg='white').pack(pady=(0, 30))
-        
-        button_frame = tk.Frame(dialog, bg='white')
-        button_frame.pack(pady=20)
-        
-        Button(button_frame, text="Yes - I'll Scan It", command=on_yes,
-               font=font.Font(size=18), bg='#4CAF50', fg='white',
-               width=18, height=2).pack(side='left', padx=10)
-        
-        Button(button_frame, text="No - Select from List", command=on_no,
-               font=font.Font(size=18), bg='#2196F3', fg='white',
-               width=20, height=2).pack(side='left', padx=10)
-        
-        dialog.wait_window()
-        
-        if result[0] is True:
-            # They have the fob - show scan prompt
-            self.barns_scan_mode = True
-            self.clear_message_frame()
-            
-            icon_label = tk.Label(
-                self.message_frame,
-                text="🏭",
-                font=font.Font(size=120),
-                fg='#795548',
-                bg='black'
-            )
-            icon_label.pack(pady=(50, 30))
-            
-            msg_label = tk.Label(
-                self.message_frame,
-                text="Barns Transfer",
-                font=self.header_font,
-                fg='#795548',
-                bg='black'
-            )
-            msg_label.pack(pady=(0, 20))
-            
-            instructions_label = tk.Label(
-                self.message_frame,
-                text="Scan vehicle fob to transfer to Barns",
-                font=self.body_font,
-                fg='white',
-                bg='black'
-            )
-            instructions_label.pack()
-            
-            self.last_scan_time = datetime.now()
-            return
-            
-        elif result[0] is False:
-            # Continue with list selection (existing code below)
-            pass
-        else:
-            # Cancelled
-            self.show_welcome()
-            return
-        
-        # Get all vehicles via API
-        success, all_equipment = self.list_equipment_api()
-        
-        if not success:
-            self.show_error(f"Failed to load vehicles: {all_equipment}")
-            return
-        
-        # Filter to just vehicles (not equipment)
-        vehicles = [item for item in all_equipment 
-                   if item.get('category') in ('Squad Cars', 'Specialized Services Vehicles', 'CID Vehicles', 'Other Vehicles')]
-        
-        if not vehicles:
-            self.show_error("No vehicles found")
-            return
-        
-        # Create selection dialog
-        result = [None]
-        
-        def on_select():
-            selection = listbox.curselection()
-            if selection:
-                result[0] = vehicles[selection[0]]
-                dialog.destroy()
-        
-        dialog = Toplevel(self.root)
-        dialog.title("Barns Transfer - Select Vehicle")
-        dialog.geometry("800x800")
-        dialog.configure(bg='white')
-        dialog.transient(self.root)
-        dialog.grab_set()
-        
-        Label(dialog, text="🏭 Transfer Vehicle to The Barns", 
-              font=font.Font(size=20, weight='bold'), bg='white').pack(pady=(20, 10))
-        
-        Label(dialog, text="Select the vehicle being dropped off:", 
-              font=font.Font(size=14), bg='white').pack(pady=(0, 20))
-        
-        # Listbox with scrollbar
-        list_frame = tk.Frame(dialog, bg='white')
-        list_frame.pack(fill='both', expand=True, padx=20, pady=(0, 20))
-        
-        scrollbar = Scrollbar(list_frame)
-        scrollbar.pack(side='right', fill='y')
-        
-        listbox = Listbox(list_frame, font=font.Font(size=14), height=20, 
-                         yscrollcommand=scrollbar.set, selectmode=SINGLE)
-        listbox.pack(side='left', fill='both', expand=True)
-        scrollbar.config(command=listbox.yview)
-        
-        # Populate list
-        for v in vehicles:
-            status = "Available" if not v['checkout_id'] else f"Checked out to {v['first_name']} {v['last_name']}"
-            listbox.insert('end', f"{v['vehicle_name']} - {status}")
-        
-        # Buttons
-        button_frame = tk.Frame(dialog, bg='white')
-        button_frame.pack(pady=20)
-        
-        Button(button_frame, text="Transfer to Barns", command=on_select,
-               font=font.Font(size=16), bg='#795548', fg='white',
-               width=18, height=2).pack(side='left', padx=10)
-        
-        Button(button_frame, text="Cancel", command=dialog.destroy,
-               font=font.Font(size=16), bg='#999', fg='white',
-               width=12, height=2).pack(side='left', padx=10)
-        
-        dialog.wait_window()
-        
-        if not result[0]:
-            return
-        
-        vehicle = result[0]
-        
-        # Perform transfer
-        self.perform_barns_transfer(vehicle)
-
-
-    def perform_barns_transfer(self, vehicle):
-        """Actually perform the barns transfer for a given vehicle"""
-        from tkinter import Label
-        
-        # Transfer via API
-        success, error = self.barns_transfer_api(vehicle['id'])
-        
-        if not success:
-            self.show_error(f"Transfer failed: {error}")
-            return
-        
-        self.notify_server()
-        
-        # Show success
-        self.clear_message_frame()
-        
-        Label(self.message_frame, text="✅", font=font.Font(size=120),
-              fg='#4CAF50', bg='black').pack(pady=(50, 30))
-        
-        Label(self.message_frame, 
-              text=f"{vehicle['vehicle_name']}\ntransferred to The Barns",
-              font=self.header_font, fg='white', bg='black',
-              justify='center').pack()
-        
-        self.root.after(3000, self.show_welcome)
-
 
     def show_user_greeting(self, user):
         """Show greeting after card scan"""
@@ -2086,17 +1861,6 @@ class KioskGUI:
                 self.show_error("Unknown fob")
             return
 
-        # Check if in Barns scan mode
-        if self.barns_scan_mode:
-            found, fob = self.lookup_api('fob', fob_id)
-            if not found or not fob:
-                self.show_error("Equipment not found")
-                return
-            
-            # Perform barns transfer with this fob
-            self.barns_scan_mode = False
-            self.perform_barns_transfer(fob)
-            return
         
         # Look up fob via API
         found, fob = self.lookup_api('fob', fob_id)
@@ -2104,7 +1868,7 @@ class KioskGUI:
         if not found or not fob:
             # New fob - register it
             
-            vehicle_name = self.get_text_input("New Key Fob! What is this for?\n(e.g., 'Squad 91', 'Thermal 2')")
+            vehicle_name = self.get_text_input("New Item! What is this for?\n(e.g., 'Master Key A', 'Drill 1')")
             self.last_scan_time = datetime.now() # reset timeout
             if not vehicle_name:
                 self.show_error("Registration cancelled")
@@ -2130,8 +1894,8 @@ class KioskGUI:
                   font=font.Font(size=18), bg='white', wraplength=550).pack(pady=(40, 20))
             
             # Dropdown for category
-            category_var = tk.StringVar(value="Squad Cars")
-            categories = ["Squad Cars", "Specialized Services Vehicles", "CID Vehicles", "Other Vehicles", "Equipment", "Key Rings"]
+            category_var = tk.StringVar(value="Keys")
+            categories = ["Keys", "Vehicles", "Equipment", "Tools", "Other"]
             
             dropdown = ttk.Combobox(dialog, textvariable=category_var, values=categories, 
                                    font=font.Font(size=16), state='readonly', width=20)
@@ -2142,7 +1906,7 @@ class KioskGUI:
                    width=15, height=2).pack(pady=20)
             
             dialog.wait_window()
-            category = result[0] if result[0] else "Squad Cars"
+            category = result[0] if result[0] else "Keys"
             self.last_scan_time = datetime.now()  # Reset timeout
             
             location = self.get_text_input("Location (press OK for 'Station'):", title="Location") or "Station"
