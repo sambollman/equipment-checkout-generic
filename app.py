@@ -11,6 +11,9 @@ from functools import wraps
 KIOSK_USER = os.getenv('KIOSK_USER', 'kiosk')
 KIOSK_PASS = os.getenv('KIOSK_PASS', 'change-this-in-production')
 
+# Dashboard password (protects the main dashboard view)
+DASHBOARD_PASS = os.getenv('DASHBOARD_PASS', '')
+
 def require_kiosk_auth(f):
     """Decorator to require HTTP Basic Auth for kiosk endpoints"""
     @wraps(f)
@@ -18,6 +21,15 @@ def require_kiosk_auth(f):
         auth = request.authorization
         if not auth or auth.username != KIOSK_USER or auth.password != KIOSK_PASS:
             return {'error': 'Unauthorized'}, 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+def require_dashboard_auth(f):
+    """Decorator to require dashboard login"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if DASHBOARD_PASS and not session.get('dashboard_authenticated'):
+            return redirect(url_for('dashboard_login'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -58,6 +70,7 @@ def compact_database():
 
 
 @app.route('/')
+@require_dashboard_auth
 def index():
     """Main page showing all key fobs and their status"""
     conn = get_db()
@@ -751,6 +764,24 @@ def api_search_equipment():
     except Exception as e:
         conn.close()
         return {'error': str(e)}, 500
+
+@app.route('/dashboard/login', methods=['GET', 'POST'])
+def dashboard_login():
+    """Dashboard login page"""
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if password == DASHBOARD_PASS:
+            session['dashboard_authenticated'] = True
+            return redirect(url_for('index'))
+        else:
+            return render_template('dashboard_login.html', error='Invalid password')
+    return render_template('dashboard_login.html')
+
+@app.route('/dashboard/logout')
+def dashboard_logout():
+    """Dashboard logout"""
+    session.pop('dashboard_authenticated', None)
+    return redirect(url_for('dashboard_login'))
 
 # Admin login - only available if ADMIN_PASSWORD is set
 if ADMIN_PASSWORD:
