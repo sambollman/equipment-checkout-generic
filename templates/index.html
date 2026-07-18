@@ -379,22 +379,36 @@ body {
      
     <div class="tab-container">
         <button class="tab active" data-category="Keys">🔑 Keys</button>
-        <button class="tab" data-category="Vehicles">🚗 Vehicles</button>
-        <button class="tab" data-category="Equipment">🔧 Equipment</button>
+        <button class="tab" data-category="Rentables">📦 Rentables</button>
         <button class="tab" data-category="Tools">🛠️ Tools</button>
-        <button class="tab" data-category="Other">📦 Other</button>
+        <button class="tab" data-category="Vehicles">🚗 Vehicles</button>
+        <button class="tab" data-category="Garage">🏠 Garage</button>
+        <button class="tab" data-category="Lighting">💡 Lighting</button>
+        <button class="tab" data-category="Window Coverings">🪟 Window Coverings</button>
+        <button class="tab" data-category="Key Room">🗝️ Key Room</button>
+        <button class="tab" data-category="Electrical">⚡ Electrical</button>
+        <button class="tab" data-category="Hardware">🔩 Hardware</button>
+        <button class="tab" data-category="Plumbing">🔧 Plumbing</button>
+        <button class="tab" data-category="Building Materials">🧱 Building Materials</button>
+        <button class="tab" data-category="HVAC">❄️ HVAC</button>
+        <button class="tab" data-category="Cleaning">🧹 Cleaning</button>
+        <button class="tab" data-category="Discontinued">🚫 Discontinued</button>
     </div>
 
     <div class="tab-content active" id="Keys-content">
     <div class="grid">
         {% for key in keys %}
-        <div class="key-card {% if key.checkout_id %}checked-out{% else %}available{% endif %}">
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
                 <div class="status checked-out">
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
                 </div>
             {% else %}
                 <div class="status available">
@@ -416,25 +430,35 @@ body {
                 </div>
             {% endif %}
             {% if key.note %}
-                <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
-                    ⚠️ Note: {{ key.note.note_text }}
-                </div>
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
             {% endif %}
         </div>
         {% endfor %}
     </div>
 </div>
 
-<div class="tab-content" id="Vehicles-content">
+<div class="tab-content " id="Rentables-content">
     <div class="grid">
-        {% for key in vehicles %}
-        <div class="key-card {% if key.checkout_id %}checked-out{% else %}available{% endif %}">
+        {% for key in rentables %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
                 <div class="status checked-out">
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
                 </div>
             {% else %}
                 <div class="status available">
@@ -456,65 +480,35 @@ body {
                 </div>
             {% endif %}
             {% if key.note %}
-                <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
-                    ⚠️ Note: {{ key.note.note_text }}
-                </div>
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
             {% endif %}
         </div>
         {% endfor %}
     </div>
 </div>
 
-<div class="tab-content" id="Equipment-content">
-    <div class="grid">
-        {% for key in equipment %}
-        <div class="key-card {% if key.checkout_id %}checked-out{% else %}available{% endif %}">
-            <div class="vehicle-name">{{ key.vehicle_name }}</div>
-            {% if key.checkout_id %}
-                <div class="status checked-out">
-                    <strong>Checked out to:</strong><br>
-                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
-                    <small>Since {{ key.checked_out_at }}</small>
-                </div>
-            {% else %}
-                <div class="status available">
-                    ✓ Available
-                </div>
-            {% endif %}
-            {% if key.reservation %}
-                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
-                    📅 Reserved<br>
-                    <small>
-                        {% if key.reservation.first_name %}
-                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
-                        {% elif key.reservation.reserved_for_name %}
-                            For: {{ key.reservation.reserved_for_name }}<br>
-                        {% endif %}
-                        Time: {{ key.reservation.reserved_datetime }}<br>
-                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
-                    </small>
-                </div>
-            {% endif %}
-            {% if key.note %}
-                <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
-                    ⚠️ Note: {{ key.note.note_text }}
-                </div>
-            {% endif %}
-        </div>
-        {% endfor %}
-    </div>
-</div>
-
-<div class="tab-content" id="Tools-content">
+<div class="tab-content " id="Tools-content">
     <div class="grid">
         {% for key in tools %}
-        <div class="key-card {% if key.checkout_id %}checked-out{% else %}available{% endif %}">
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
                 <div class="status checked-out">
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
                 </div>
             {% else %}
                 <div class="status available">
@@ -536,25 +530,35 @@ body {
                 </div>
             {% endif %}
             {% if key.note %}
-                <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
-                    ⚠️ Note: {{ key.note.note_text }}
-                </div>
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
             {% endif %}
         </div>
         {% endfor %}
     </div>
 </div>
 
-<div class="tab-content" id="Other-content">
+<div class="tab-content " id="Vehicles-content">
     <div class="grid">
-        {% for key in other %}
-        <div class="key-card {% if key.checkout_id %}checked-out{% else %}available{% endif %}">
+        {% for key in vehicles %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
                 <div class="status checked-out">
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
                 </div>
             {% else %}
                 <div class="status available">
@@ -576,14 +580,572 @@ body {
                 </div>
             {% endif %}
             {% if key.note %}
-                <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
-                    ⚠️ Note: {{ key.note.note_text }}
-                </div>
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
             {% endif %}
         </div>
         {% endfor %}
     </div>
 </div>
+
+<div class="tab-content " id="Garage-content">
+    <div class="grid">
+        {% for key in garage %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
+            <div class="vehicle-name">{{ key.vehicle_name }}</div>
+            {% if key.checkout_id %}
+                <div class="status checked-out">
+                    <strong>Checked out to:</strong><br>
+                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
+                    <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
+                </div>
+            {% else %}
+                <div class="status available">
+                    ✓ Available
+                </div>
+            {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="tab-content " id="Lighting-content">
+    <div class="grid">
+        {% for key in lighting %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
+            <div class="vehicle-name">{{ key.vehicle_name }}</div>
+            {% if key.checkout_id %}
+                <div class="status checked-out">
+                    <strong>Checked out to:</strong><br>
+                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
+                    <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
+                </div>
+            {% else %}
+                <div class="status available">
+                    ✓ Available
+                </div>
+            {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="tab-content " id="Window Coverings-content">
+    <div class="grid">
+        {% for key in window_coverings %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
+            <div class="vehicle-name">{{ key.vehicle_name }}</div>
+            {% if key.checkout_id %}
+                <div class="status checked-out">
+                    <strong>Checked out to:</strong><br>
+                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
+                    <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
+                </div>
+            {% else %}
+                <div class="status available">
+                    ✓ Available
+                </div>
+            {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="tab-content " id="Key Room-content">
+    <div class="grid">
+        {% for key in key_room %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
+            <div class="vehicle-name">{{ key.vehicle_name }}</div>
+            {% if key.checkout_id %}
+                <div class="status checked-out">
+                    <strong>Checked out to:</strong><br>
+                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
+                    <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
+                </div>
+            {% else %}
+                <div class="status available">
+                    ✓ Available
+                </div>
+            {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="tab-content " id="Electrical-content">
+    <div class="grid">
+        {% for key in electrical %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
+            <div class="vehicle-name">{{ key.vehicle_name }}</div>
+            {% if key.checkout_id %}
+                <div class="status checked-out">
+                    <strong>Checked out to:</strong><br>
+                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
+                    <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
+                </div>
+            {% else %}
+                <div class="status available">
+                    ✓ Available
+                </div>
+            {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="tab-content " id="Hardware-content">
+    <div class="grid">
+        {% for key in hardware %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
+            <div class="vehicle-name">{{ key.vehicle_name }}</div>
+            {% if key.checkout_id %}
+                <div class="status checked-out">
+                    <strong>Checked out to:</strong><br>
+                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
+                    <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
+                </div>
+            {% else %}
+                <div class="status available">
+                    ✓ Available
+                </div>
+            {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="tab-content " id="Plumbing-content">
+    <div class="grid">
+        {% for key in plumbing %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
+            <div class="vehicle-name">{{ key.vehicle_name }}</div>
+            {% if key.checkout_id %}
+                <div class="status checked-out">
+                    <strong>Checked out to:</strong><br>
+                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
+                    <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
+                </div>
+            {% else %}
+                <div class="status available">
+                    ✓ Available
+                </div>
+            {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="tab-content " id="Building Materials-content">
+    <div class="grid">
+        {% for key in building_materials %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
+            <div class="vehicle-name">{{ key.vehicle_name }}</div>
+            {% if key.checkout_id %}
+                <div class="status checked-out">
+                    <strong>Checked out to:</strong><br>
+                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
+                    <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
+                </div>
+            {% else %}
+                <div class="status available">
+                    ✓ Available
+                </div>
+            {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="tab-content " id="HVAC-content">
+    <div class="grid">
+        {% for key in hvac %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
+            <div class="vehicle-name">{{ key.vehicle_name }}</div>
+            {% if key.checkout_id %}
+                <div class="status checked-out">
+                    <strong>Checked out to:</strong><br>
+                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
+                    <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
+                </div>
+            {% else %}
+                <div class="status available">
+                    ✓ Available
+                </div>
+            {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="tab-content " id="Cleaning-content">
+    <div class="grid">
+        {% for key in cleaning %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
+            <div class="vehicle-name">{{ key.vehicle_name }}</div>
+            {% if key.checkout_id %}
+                <div class="status checked-out">
+                    <strong>Checked out to:</strong><br>
+                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
+                    <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
+                </div>
+            {% else %}
+                <div class="status available">
+                    ✓ Available
+                </div>
+            {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="tab-content " id="Discontinued-content">
+    <div class="grid">
+        {% for key in discontinued %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
+            <div class="vehicle-name">{{ key.vehicle_name }}</div>
+            {% if key.checkout_id %}
+                <div class="status checked-out">
+                    <strong>Checked out to:</strong><br>
+                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
+                    <small>Since {{ key.checked_out_at }}</small>
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
+                </div>
+            {% else %}
+                <div class="status available">
+                    ✓ Available
+                </div>
+            {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+
 
     <script>
         // Dark mode toggle functionality
@@ -640,10 +1202,20 @@ body {
         function updateDisplay(data) {
             // Update each category tab
             updateSection('Keys', data.keys);
-            updateSection('Vehicles', data.vehicles);
-            updateSection('Equipment', data.equipment);
+            updateSection('Rentables', data.rentables);
             updateSection('Tools', data.tools);
-            updateSection('Other', data.other);
+            updateSection('Vehicles', data.vehicles);
+            updateSection('Garage', data.garage);
+            updateSection('Lighting', data.lighting);
+            updateSection('Window Coverings', data.window_coverings);
+            updateSection('Key Room', data.key_room);
+            updateSection('Electrical', data.electrical);
+            updateSection('Hardware', data.hardware);
+            updateSection('Plumbing', data.plumbing);
+            updateSection('Building Materials', data.building_materials);
+            updateSection('HVAC', data.hvac);
+            updateSection('Cleaning', data.cleaning);
+            updateSection('Discontinued', data.discontinued);
         }
         
         function updateSection(category, items) {

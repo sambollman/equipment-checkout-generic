@@ -23,11 +23,21 @@
             <input type="text" name="vehicle_name" value="{{ fob.vehicle_name }}" required>
             <label>Category:</label>
             <select name="category">
-                <option value="Keys" {% if fob.category == 'Keys' %}selected{% endif %}>Keys</option>
-                <option value="Vehicles" {% if fob.category == 'Vehicles' %}selected{% endif %}>Vehicles</option>
-                <option value="Equipment" {% if fob.category == 'Equipment' %}selected{% endif %}>Equipment</option>
+                <option value="Discontinued" {% if fob.category == 'Discontinued' %}selected{% endif %}>Discontinued</option>
+                <option value="Rentables" {% if fob.category == 'Rentables' %}selected{% endif %}>Rentables</option>
+                <option value="Garage" {% if fob.category == 'Garage' %}selected{% endif %}>Garage</option>
+                <option value="Lighting" {% if fob.category == 'Lighting' %}selected{% endif %}>Lighting</option>
                 <option value="Tools" {% if fob.category == 'Tools' %}selected{% endif %}>Tools</option>
-                <option value="Other" {% if fob.category == 'Other' %}selected{% endif %}>Other</option>
+                <option value="Window Coverings" {% if fob.category == 'Window Coverings' %}selected{% endif %}>Window Coverings</option>
+                <option value="Key Room" {% if fob.category == 'Key Room' %}selected{% endif %}>Key Room</option>
+                <option value="Electrical" {% if fob.category == 'Electrical' %}selected{% endif %}>Electrical</option>
+                <option value="Hardware" {% if fob.category == 'Hardware' %}selected{% endif %}>Hardware</option>
+                <option value="Plumbing" {% if fob.category == 'Plumbing' %}selected{% endif %}>Plumbing</option>
+                <option value="Building Materials" {% if fob.category == 'Building Materials' %}selected{% endif %}>Building Materials</option>
+                <option value="HVAC" {% if fob.category == 'HVAC' %}selected{% endif %}>HVAC</option>
+                <option value="Cleaning" {% if fob.category == 'Cleaning' %}selected{% endif %}>Cleaning</option>
+                <option value="Vehicles" {% if fob.category == 'Vehicles' %}selected{% endif %}>Vehicles</option>
+                <option value="Keys" {% if fob.category == 'Keys' %}selected{% endif %}>Keys</option>
             </select>
             <label>Location:</label>
             <input type="text" name="location" value="{{ fob.location }}" required>

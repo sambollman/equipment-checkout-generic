@@ -214,32 +214,39 @@ def index():
                 for text in re.split('([0-9]+)', item['vehicle_name'])]
     
     # Group by category with natural sorting
-    keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], 
-                       key=natural_sort_key)
-    vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'],
-                         key=natural_sort_key)
-    # Equipment, Tools, Other: Sort by checked-out status first, then alphabetically
-    def status_then_name_sort(item):
-        # Return tuple: (0 if checked out, 1 if available), then natural sort key
-        is_available = 0 if item.get('checkout_id') else 1
-        name_parts = [int(text) if text.isdigit() else text.lower() 
-                     for text in re.split('([0-9]+)', item['vehicle_name'])]
-        return (is_available, name_parts)
-    
-    equipment = sorted([k for k in formatted_keys if k['category'] == 'Equipment'], 
-                      key=status_then_name_sort)
-    tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], 
-                       key=status_then_name_sort)
-    other = sorted([k for k in formatted_keys if k['category'] == 'Other'], 
-                       key=status_then_name_sort)
+    discontinued = sorted([k for k in formatted_keys if k['category'] == 'Discontinued'], key=natural_sort_key)
+    rentables = sorted([k for k in formatted_keys if k['category'] == 'Rentables'], key=natural_sort_key)
+    garage = sorted([k for k in formatted_keys if k['category'] == 'Garage'], key=natural_sort_key)
+    lighting = sorted([k for k in formatted_keys if k['category'] == 'Lighting'], key=natural_sort_key)
+    tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], key=natural_sort_key)
+    window_coverings = sorted([k for k in formatted_keys if k['category'] == 'Window Coverings'], key=natural_sort_key)
+    key_room = sorted([k for k in formatted_keys if k['category'] == 'Key Room'], key=natural_sort_key)
+    electrical = sorted([k for k in formatted_keys if k['category'] == 'Electrical'], key=natural_sort_key)
+    hardware = sorted([k for k in formatted_keys if k['category'] == 'Hardware'], key=natural_sort_key)
+    plumbing = sorted([k for k in formatted_keys if k['category'] == 'Plumbing'], key=natural_sort_key)
+    building_materials = sorted([k for k in formatted_keys if k['category'] == 'Building Materials'], key=natural_sort_key)
+    hvac = sorted([k for k in formatted_keys if k['category'] == 'HVAC'], key=natural_sort_key)
+    cleaning = sorted([k for k in formatted_keys if k['category'] == 'Cleaning'], key=natural_sort_key)
+    vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'], key=natural_sort_key)
+    keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=natural_sort_key)
 
     
     return render_template('index.html',
-                      keys=keys,
-                      vehicles=vehicles,
-                      equipment=equipment,
+                      discontinued=discontinued,
+                      rentables=rentables,
+                      garage=garage,
+                      lighting=lighting,
                       tools=tools,
-                      other=other)
+                      window_coverings=window_coverings,
+                      key_room=key_room,
+                      electrical=electrical,
+                      hardware=hardware,
+                      plumbing=plumbing,
+                      building_materials=building_materials,
+                      hvac=hvac,
+                      cleaning=cleaning,
+                      vehicles=vehicles,
+                      keys=keys)
 def get_current_status():
     """Get current equipment status - shared logic for API and WebSocket broadcasts"""
     conn = get_db()
@@ -365,31 +372,38 @@ def get_current_status():
         return [int(text) if text.isdigit() else text.lower() 
                 for text in re.split('([0-9]+)', item['vehicle_name'])]
     
-    keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], 
-                       key=natural_sort_key)
-    vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'],
-                         key=natural_sort_key)
-    # Equipment, Tools, Other: Sort by checked-out status first, then alphabetically
-    def status_then_name_sort(item):
-        # Return tuple: (0 if checked out, 1 if available), then natural sort key
-        is_available = 0 if item.get('checkout_id') else 1
-        name_parts = [int(text) if text.isdigit() else text.lower() 
-                     for text in re.split('([0-9]+)', item['vehicle_name'])]
-        return (is_available, name_parts)
-    
-    equipment = sorted([k for k in formatted_keys if k['category'] == 'Equipment'], 
-                      key=status_then_name_sort)
-    tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], 
-                       key=status_then_name_sort)
-    other = sorted([k for k in formatted_keys if k['category'] == 'Other'], 
-                       key=status_then_name_sort)
+    discontinued = sorted([k for k in formatted_keys if k['category'] == 'Discontinued'], key=natural_sort_key)
+    rentables = sorted([k for k in formatted_keys if k['category'] == 'Rentables'], key=natural_sort_key)
+    garage = sorted([k for k in formatted_keys if k['category'] == 'Garage'], key=natural_sort_key)
+    lighting = sorted([k for k in formatted_keys if k['category'] == 'Lighting'], key=natural_sort_key)
+    tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], key=natural_sort_key)
+    window_coverings = sorted([k for k in formatted_keys if k['category'] == 'Window Coverings'], key=natural_sort_key)
+    key_room = sorted([k for k in formatted_keys if k['category'] == 'Key Room'], key=natural_sort_key)
+    electrical = sorted([k for k in formatted_keys if k['category'] == 'Electrical'], key=natural_sort_key)
+    hardware = sorted([k for k in formatted_keys if k['category'] == 'Hardware'], key=natural_sort_key)
+    plumbing = sorted([k for k in formatted_keys if k['category'] == 'Plumbing'], key=natural_sort_key)
+    building_materials = sorted([k for k in formatted_keys if k['category'] == 'Building Materials'], key=natural_sort_key)
+    hvac = sorted([k for k in formatted_keys if k['category'] == 'HVAC'], key=natural_sort_key)
+    cleaning = sorted([k for k in formatted_keys if k['category'] == 'Cleaning'], key=natural_sort_key)
+    vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'], key=natural_sort_key)
+    keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=natural_sort_key)
     
     return {
-        'keys': keys,
-        'vehicles': vehicles,
-        'equipment': equipment,
+        'discontinued': discontinued,
+        'rentables': rentables,
+        'garage': garage,
+        'lighting': lighting,
         'tools': tools,
-        'other': other,
+        'window_coverings': window_coverings,
+        'key_room': key_room,
+        'electrical': electrical,
+        'hardware': hardware,
+        'plumbing': plumbing,
+        'building_materials': building_materials,
+        'hvac': hvac,
+        'cleaning': cleaning,
+        'vehicles': vehicles,
+        'keys': keys,
         'active_reservations': formatted_reservations
     }
 
