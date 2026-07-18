@@ -10,3 +10,4 @@ venv/
 
 # Don't upload system files
 .DS_Store
+cloudflared.deb
