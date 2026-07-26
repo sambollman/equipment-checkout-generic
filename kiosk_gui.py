@@ -2,7 +2,6 @@
 import tkinter as tk
 from tkinter import font
 import time
-from database import get_db
 from datetime import datetime, timedelta
 import threading
 import pytz
