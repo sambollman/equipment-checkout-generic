@@ -15,9 +15,6 @@ SERVER_URL = os.getenv('SERVER_URL', 'http://localhost:5000')
 KIOSK_USER = os.getenv('KIOSK_USER', 'kiosk')
 KIOSK_PASS = os.getenv('KIOSK_PASS', 'change-this-in-production')
 
-print(f"DEBUG: SERVER_URL={SERVER_URL}")
-print(f"DEBUG: KIOSK_USER={KIOSK_USER}")
-print(f"DEBUG: KIOSK_PASS={KIOSK_PASS}")
 
 class KioskGUI:
     def __init__(self, kiosk_id='kiosk1'):
@@ -31,6 +28,7 @@ class KioskGUI:
         self.note_mode = False
         self.bulk_checkout_mode = False
         self.bulk_items = []
+        self.add_new_mode = False
 
 
         # Create main window
@@ -100,6 +98,7 @@ class KioskGUI:
         self.pending_fob = None
         self.bulk_checkout_mode = False
         self.bulk_items = []
+        self.add_new_mode = False
         self.replace_mode = None
         self.replace_item = None
         self.note_mode = False
@@ -153,19 +152,14 @@ class KioskGUI:
                 },
                 timeout=5
             )
-            print(f"DEBUG: API response status = {response.status_code}")
-            print(f"DEBUG: API response = {response.text}")
 
             if response.status_code == 201:
                 data = response.json()
-                print(f"DEBUG: data = {data}")
-                print(f"DEBUG: user dict = {data.get('user')}")
                 return True, data['user']  # Return user dict on success
             else:
                 error_msg = response.json().get('error', 'Unknown error')
                 return False, error_msg
         except Exception as e:
-            print(f"DEBUG: Exception in register_user_api: {e}")
             return False, str(e)
     
     def register_equipment_api(self, fob_id, vehicle_name, category, location):
@@ -866,6 +860,7 @@ class KioskGUI:
         self.current_user = None
         self.bulk_checkout_mode = False
         self.bulk_items = []
+        self.add_new_mode = False
     
         # Big icon/emoji
         icon_label = tk.Label(
@@ -947,7 +942,24 @@ class KioskGUI:
             command=self.replace_card
         )
         card_btn.pack(side='left', padx=10)
- 
+
+        # Button container - Third row
+        button_frame3 = tk.Frame(self.message_frame, bg='black')
+        button_frame3.pack(pady=10)
+
+        # Add New button
+        add_new_btn = tk.Button(
+            button_frame3,
+            text="➕ Add New",
+            font=font.Font(size=16, weight='bold'),
+            bg='#009688',
+            fg='white',
+            width=15,
+            height=2,
+            command=self.start_add_new
+        )
+        add_new_btn.pack(side='left', padx=10)
+
         # Instructions
         self.entry.focus_set()
         self.instructions_label.config(text="")
@@ -1249,10 +1261,7 @@ class KioskGUI:
         
         # Bulk checkout via API
         fob_ids = [fob['id'] for fob in items_to_checkout]
-        print(f"DEBUG: Checking out fob_ids: {fob_ids}")
-        print(f"DEBUG: User ID: {self.current_user['id']}")
         success, result = self.bulk_checkout_api(self.current_user['id'], fob_ids)
-        print(f"DEBUG: API result - success: {success}, result: {result}")
 
         if not success:
             self.show_error(f"Bulk checkout failed: {result}")
@@ -1305,6 +1314,7 @@ class KioskGUI:
         # Reset and return to welcome
         self.bulk_checkout_mode = False
         self.bulk_items = []
+        self.add_new_mode = False
         self.current_user = None
         self.root.after(4000, self.show_welcome)
 
@@ -1312,6 +1322,7 @@ class KioskGUI:
         """Cancel bulk checkout and return to welcome"""
         self.bulk_checkout_mode = False
         self.bulk_items = []
+        self.add_new_mode = False
         self.current_user = None
         self.show_welcome()
     
@@ -1326,6 +1337,35 @@ class KioskGUI:
     def replace_card(self):
         """Button handler for replacing card"""
         self.start_replace_card_mode()
+
+    def start_add_new(self):
+        """Start add new user/item mode"""
+        self.add_new_mode = True
+        self.clear_message_frame()
+
+        tk.Label(self.message_frame, text="➕", font=font.Font(size=120),
+              fg='#009688', bg='black').pack(pady=(50, 30))
+
+        tk.Label(self.message_frame, text="Add New User or Item",
+              font=self.header_font, fg='#009688', bg='black').pack(pady=(0, 20))
+
+        tk.Label(self.message_frame, text="Scan the keycard or equipment fob to register it",
+              font=self.body_font, fg='white', bg='black').pack(pady=(0, 20))
+
+        cancel_btn = tk.Button(
+            self.message_frame,
+            text="❌ Cancel",
+            font=font.Font(size=16, weight='bold'),
+            bg='#f44336',
+            fg='white',
+            width=15,
+            height=2,
+            command=self.show_welcome
+        )
+        cancel_btn.pack(pady=20)
+
+        self.instructions_label.config(text="Session will timeout after 60 seconds")
+        self.last_scan_time = datetime.now()
 
     def show_user_greeting(self, user):
         """Show greeting after card scan"""
@@ -1483,22 +1523,17 @@ class KioskGUI:
             self.scan_buffer += event.char
     def process_scan(self, scan_data):
         """Process a scanned card or fob"""
-        print(f"DEBUG process_scan: scan_data={scan_data}, replace_mode={self.replace_mode}")
         # Check if we're in replace mode - bypass lookup for new card/fob
         if self.replace_mode == 'card':
-            print(f"DEBUG: In replace card mode, calling handle_card_scan")
             self.handle_card_scan(scan_data)
             return
         elif self.replace_mode == 'fob':
-            print(f"DEBUG: In replace fob mode, calling handle_fob_scan")
             self.handle_fob_scan(scan_data)
             return
 
 
-        print(f"DEBUG: About to call lookup_api")
         # Look up via API
         found, data = self.lookup_api('scan', scan_data)
-        print(f"DEBUG: lookup_api returned found={found}, data={data}")
         # If we went offline, stop processing
         if data == 'OFFLINE':
             return
@@ -1509,7 +1544,9 @@ class KioskGUI:
                 self.handle_card_scan(scan_data)
             else:  # It's a fob
                 self.handle_fob_scan(scan_data)
-        else:
+        elif self.add_new_mode:
+            # Unknown scan in add new mode - ask if card or equipment
+            self.add_new_mode = False
             # Ask if card or equipment with custom larger dialog
             from tkinter import Toplevel, Button, Label
             
@@ -1548,11 +1585,22 @@ class KioskGUI:
                 self.handle_card_scan(scan_data)
             else:
                 self.handle_fob_scan(scan_data)
+        else:
+            # Unknown scan outside of add new mode - show error
+            self.clear_message_frame()
+            tk.Label(self.message_frame, text="❓", font=font.Font(size=120),
+                  fg='#666', bg='black').pack(pady=(50, 30))
+            tk.Label(self.message_frame, text="Not Recognized",
+                  font=self.header_font, fg='#666', bg='black').pack(pady=(0, 20))
+            tk.Label(self.message_frame, text="Use the 'Add New' button to register a new user or item",
+                  font=self.body_font, fg='white', bg='black',
+                  wraplength=800, justify='center').pack()
+            self.instructions_label.config(text="")
+            self.root.after(3000, self.show_welcome)
 
     
     def handle_card_scan(self, card_id):
         """Handle a card scan"""
-        print(f"DEBUG handle_card_scan: card_id={card_id}, replace_mode={self.replace_mode}, replace_item={self.replace_item}")
         # Check if in bulk checkout mode
         if self.bulk_checkout_mode and not self.current_user:
             # Look up user via API
@@ -1766,8 +1814,6 @@ class KioskGUI:
             
             # User data returned from API
             user = result
-            print(f"DEBUG: user keys = {user.keys()}")
-            print(f"DEBUG: user = {user}")
         self.current_user = user
         self.last_scan_time = datetime.now()
         self.show_user_greeting(user)
@@ -1922,7 +1968,6 @@ class KioskGUI:
             # Equipment data returned from API
             fob = result
             print(f"DEBUT: fob keys = {fob.keys()}")
-            print(f"DEBUG: fob = {fob}")    
             self.notify_server()
    
             # If user already scanned card, check out the new fob immediately
@@ -2064,7 +2109,6 @@ class KioskGUI:
                 
                 # Get reservation from fob data (already included from API lookup)
                 reservation = fob.get('reservation')
-                print(f"DEBUG: Reservation from API: {reservation}")
                 
                 if reservation:
                     reserved_for = ""
