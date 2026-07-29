@@ -143,6 +143,8 @@ body {
             float: right;
             color: #666;
             text-decoration: none;
+            margin-bottom: 8px;
+            display: block;
         }
         body.dark-mode .admin-link {
             color: #bbb;
@@ -367,6 +369,7 @@ body {
 </head>
 <body>
     <div class="dark-mode-toggle">
+        <a href="/admin/login" style="color: #666; text-decoration: none; margin-right: 20px; font-size: 14px;">Admin</a>
         <span class="toggle-label">🌙 Night Mode</span>
         <label class="toggle-switch">
             <input type="checkbox" id="darkModeToggle">
@@ -374,9 +377,7 @@ body {
         </label>
     </div>
     <h1>Key & Equipment Checkout System</h1>
-    <a href="/admin/login" class="admin-link">Admin</a>
-
-     
+    <div style="clear: both;"></div>
     <div class="tab-container">
         <button class="tab active" data-category="Keys">🔑 Keys</button>
         <button class="tab" data-category="Rentables">📦 Rentables</button>
