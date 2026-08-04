@@ -228,16 +228,7 @@ def index():
     # Group by category with natural sorting
     discontinued = sorted([k for k in formatted_keys if k['category'] == 'Discontinued'], key=natural_sort_key)
     rentables = sorted([k for k in formatted_keys if k['category'] == 'Rentables'], key=natural_sort_key)
-    garage = sorted([k for k in formatted_keys if k['category'] == 'Garage'], key=natural_sort_key)
-    lighting = sorted([k for k in formatted_keys if k['category'] == 'Lighting'], key=natural_sort_key)
     tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], key=natural_sort_key)
-    window_coverings = sorted([k for k in formatted_keys if k['category'] == 'Window Coverings'], key=natural_sort_key)
-    key_room = sorted([k for k in formatted_keys if k['category'] == 'Key Room'], key=natural_sort_key)
-    electrical = sorted([k for k in formatted_keys if k['category'] == 'Electrical'], key=natural_sort_key)
-    hardware = sorted([k for k in formatted_keys if k['category'] == 'Hardware'], key=natural_sort_key)
-    plumbing = sorted([k for k in formatted_keys if k['category'] == 'Plumbing'], key=natural_sort_key)
-    building_materials = sorted([k for k in formatted_keys if k['category'] == 'Building Materials'], key=natural_sort_key)
-    hvac = sorted([k for k in formatted_keys if k['category'] == 'HVAC'], key=natural_sort_key)
     cleaning = sorted([k for k in formatted_keys if k['category'] == 'Cleaning'], key=natural_sort_key)
     vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'], key=natural_sort_key)
     keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=natural_sort_key)
@@ -248,16 +239,7 @@ def index():
     return render_template('index.html',
                       discontinued=discontinued,
                       rentables=rentables,
-                      garage=garage,
-                      lighting=lighting,
                       tools=tools,
-                      window_coverings=window_coverings,
-                      key_room=key_room,
-                      electrical=electrical,
-                      hardware=hardware,
-                      plumbing=plumbing,
-                      building_materials=building_materials,
-                      hvac=hvac,
                       cleaning=cleaning,
                       vehicles=vehicles,
                       keys=keys,
@@ -392,16 +374,7 @@ def get_current_status():
     
     discontinued = sorted([k for k in formatted_keys if k['category'] == 'Discontinued'], key=natural_sort_key)
     rentables = sorted([k for k in formatted_keys if k['category'] == 'Rentables'], key=natural_sort_key)
-    garage = sorted([k for k in formatted_keys if k['category'] == 'Garage'], key=natural_sort_key)
-    lighting = sorted([k for k in formatted_keys if k['category'] == 'Lighting'], key=natural_sort_key)
     tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], key=natural_sort_key)
-    window_coverings = sorted([k for k in formatted_keys if k['category'] == 'Window Coverings'], key=natural_sort_key)
-    key_room = sorted([k for k in formatted_keys if k['category'] == 'Key Room'], key=natural_sort_key)
-    electrical = sorted([k for k in formatted_keys if k['category'] == 'Electrical'], key=natural_sort_key)
-    hardware = sorted([k for k in formatted_keys if k['category'] == 'Hardware'], key=natural_sort_key)
-    plumbing = sorted([k for k in formatted_keys if k['category'] == 'Plumbing'], key=natural_sort_key)
-    building_materials = sorted([k for k in formatted_keys if k['category'] == 'Building Materials'], key=natural_sort_key)
-    hvac = sorted([k for k in formatted_keys if k['category'] == 'HVAC'], key=natural_sort_key)
     cleaning = sorted([k for k in formatted_keys if k['category'] == 'Cleaning'], key=natural_sort_key)
     vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'], key=natural_sort_key)
     keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=natural_sort_key)
@@ -412,16 +385,7 @@ def get_current_status():
     return {
         'discontinued': discontinued,
         'rentables': rentables,
-        'garage': garage,
-        'lighting': lighting,
         'tools': tools,
-        'window_coverings': window_coverings,
-        'key_room': key_room,
-        'electrical': electrical,
-        'hardware': hardware,
-        'plumbing': plumbing,
-        'building_materials': building_materials,
-        'hvac': hvac,
         'cleaning': cleaning,
         'vehicles': vehicles,
         'keys': keys,
@@ -1763,6 +1727,63 @@ def export_history():
     
     response.headers['Content-Disposition'] = f'attachment; filename={"-".join(filename_parts)}.csv'
     
+    return response
+
+@app.route('/admin/export/stock-log')
+def export_stock_log():
+    """Export Stock Parts / Cut Keys movement log as CSV, optionally filtered by mode"""
+    if not session.get('admin'):
+        return redirect(url_for('admin_login'))
+
+    mode_filter = request.args.get('mode')  # 'stock_parts' (out+in) or 'cut_key', or omitted for everything
+
+    conn = get_db()
+    query = '''
+        SELECT m.*, si.name AS item_name, si.barcode, si.item_type, u.first_name, u.last_name
+        FROM stock_movements m
+        JOIN stock_items si ON m.item_id = si.id
+        JOIN users u ON m.user_id = u.id
+    '''
+    params = []
+    if mode_filter == 'stock_parts':
+        query += " WHERE m.mode IN ('stock_parts_out', 'stock_parts_in')"
+    elif mode_filter == 'cut_key':
+        query += " WHERE m.mode = 'cut_key'"
+    query += ' ORDER BY m.created_at DESC'
+
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    chicago_tz = pytz.timezone('America/Chicago')
+
+    csv_lines = ["Direction,Item,Barcode,Quantity,Employee,Property,Kiosk,When"]
+    mode_labels = {'stock_parts_out': 'Out', 'stock_parts_in': 'In', 'cut_key': 'Cut'}
+
+    for entry in rows:
+        try:
+            dt = datetime.fromisoformat(entry['created_at'])
+            if dt.tzinfo is None:
+                dt = pytz.UTC.localize(dt)
+            dt = dt.astimezone(chicago_tz)
+            when = dt.strftime('%Y-%m-%d %I:%M:%S %p')
+        except Exception:
+            when = entry['created_at']
+
+        direction = mode_labels.get(entry['mode'], entry['mode'])
+        employee = f"{entry['first_name']} {entry['last_name']}"
+        csv_lines.append(
+            f'"{direction}","{entry["item_name"]}","{entry["barcode"]}","{entry["quantity"]}",'
+            f'"{employee}","{entry["property_note"]}","{entry["kiosk_id"]}","{when}"'
+        )
+
+    csv_content = '\n'.join(csv_lines)
+
+    response = make_response(csv_content)
+    response.headers['Content-Type'] = 'text/csv'
+
+    filename_parts = [mode_filter or 'stock_and_cut_key', 'log', datetime.now().strftime("%Y%m%d_%H%M%S")]
+    response.headers['Content-Disposition'] = f'attachment; filename={"-".join(filename_parts)}.csv'
+
     return response
 
 @app.route('/admin/user/add', methods=['POST'])
