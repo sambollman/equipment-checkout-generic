@@ -1786,6 +1786,35 @@ def export_stock_log():
 
     return response
 
+@app.route('/admin/export/stock-items')
+def export_stock_items():
+    """Export the Stock Items Catalog (barcode, name, type, on-hand qty) as CSV"""
+    if not session.get('admin'):
+        return redirect(url_for('admin_login'))
+
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT * FROM stock_items WHERE is_active = 1 ORDER BY item_type, name'
+    ).fetchall()
+    conn.close()
+
+    csv_lines = ["Name,Barcode,Type,On Hand Qty"]
+    type_labels = {'stock_part': 'Stock Part', 'key_blank': 'Key Blank'}
+
+    for item in rows:
+        item_type = type_labels.get(item['item_type'], item['item_type'])
+        csv_lines.append(
+            f'"{item["name"]}","{item["barcode"]}","{item_type}","{item["on_hand_qty"]}"'
+        )
+
+    csv_content = '\n'.join(csv_lines)
+
+    response = make_response(csv_content)
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = f'attachment; filename=stock-items-catalog-{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+
+    return response
+
 @app.route('/admin/user/add', methods=['POST'])
 def add_user():
     """Add a new user"""
