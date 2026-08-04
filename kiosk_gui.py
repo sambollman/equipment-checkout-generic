@@ -2401,7 +2401,7 @@ class KioskGUI:
             
             # Dropdown for category
             category_var = tk.StringVar(value="Keys")
-            categories = ["Discontinued", "Rentables", "Garage", "Lighting", "Tools", "Window Coverings", "Key Room", "Electrical", "Hardware", "Plumbing", "Building Materials", "HVAC", "Cleaning", "Vehicles", "Keys", "Lock Box"]
+            categories = ["Discontinued", "Rentables", "Tools", "Cleaning", "Vehicles", "Keys", "Lock Box"]
             
             dropdown = ttk.Combobox(dialog, textvariable=category_var, values=categories, 
                                    font=font.Font(size=16), state='readonly', width=20)
