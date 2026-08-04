@@ -1,11 +1,22 @@
 from flask import Flask, render_template, request, redirect, url_for, session, make_response, send_file
 from flask_socketio import SocketIO, emit
-from database import get_db
+from database import get_db, migrate_db
 from datetime import datetime, timedelta
 import pytz
 import hashlib
 import os
+import uuid
 from functools import wraps
+
+# Bring any existing database up to date (adds property_note, expires_at,
+# stock_items/stock_movements tables if they're missing). Safe to run on
+# every startup.
+migrate_db()
+
+# Categories that require a free-text "which property is this for" note at
+# checkout time. Rentables + Lock Box both get physically carried to and left
+# at a property, so we capture where they went.
+PROPERTY_NOTE_REQUIRED_CATEGORIES = ('Rentables', 'Lock Box')
 
 # Kiosk authentication (HTTP Basic Auth)
 KIOSK_USER = os.getenv('KIOSK_USER', 'kiosk')
@@ -86,7 +97,8 @@ def index():
             u.first_name,
             u.last_name,
             c.checked_out_at,
-            c.id as checkout_id
+            c.id as checkout_id,
+            c.property_note
         FROM key_fobs kf
         LEFT JOIN checkouts c ON kf.id = c.fob_id AND c.checked_in_at IS NULL
         LEFT JOIN users u ON c.user_id = u.id
@@ -229,8 +241,10 @@ def index():
     cleaning = sorted([k for k in formatted_keys if k['category'] == 'Cleaning'], key=natural_sort_key)
     vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'], key=natural_sort_key)
     keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=natural_sort_key)
+    lock_box = sorted([k for k in formatted_keys if k['category'] == 'Lock Box'], key=natural_sort_key)
 
-    
+    stock_parts_log, cut_keys_log = get_stock_logs()
+
     return render_template('index.html',
                       discontinued=discontinued,
                       rentables=rentables,
@@ -246,7 +260,10 @@ def index():
                       hvac=hvac,
                       cleaning=cleaning,
                       vehicles=vehicles,
-                      keys=keys)
+                      keys=keys,
+                      lock_box=lock_box,
+                      stock_parts_log=stock_parts_log,
+                      cut_keys_log=cut_keys_log)
 def get_current_status():
     """Get current equipment status - shared logic for API and WebSocket broadcasts"""
     conn = get_db()
@@ -262,7 +279,8 @@ def get_current_status():
             u.first_name,
             u.last_name,
             c.checked_out_at,
-            c.id as checkout_id
+            c.id as checkout_id,
+            c.property_note
         FROM key_fobs kf
         LEFT JOIN checkouts c ON kf.id = c.fob_id AND c.checked_in_at IS NULL
         LEFT JOIN users u ON c.user_id = u.id
@@ -387,7 +405,10 @@ def get_current_status():
     cleaning = sorted([k for k in formatted_keys if k['category'] == 'Cleaning'], key=natural_sort_key)
     vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'], key=natural_sort_key)
     keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=natural_sort_key)
-    
+    lock_box = sorted([k for k in formatted_keys if k['category'] == 'Lock Box'], key=natural_sort_key)
+
+    stock_parts_log, cut_keys_log = get_stock_logs()
+
     return {
         'discontinued': discontinued,
         'rentables': rentables,
@@ -404,8 +425,46 @@ def get_current_status():
         'cleaning': cleaning,
         'vehicles': vehicles,
         'keys': keys,
+        'lock_box': lock_box,
+        'stock_parts_log': stock_parts_log,
+        'cut_keys_log': cut_keys_log,
         'active_reservations': formatted_reservations
     }
+
+
+def get_stock_logs(limit=100):
+    """Fetch recent Stock Parts (out+in) and Cut Key movement log entries,
+    formatted for display. Opens and closes its own connection.
+    Returns (stock_parts_log, cut_keys_log)."""
+    chicago_tz = pytz.timezone('America/Chicago')
+    conn = get_db()
+
+    rows = conn.execute('''
+        SELECT m.*, si.name AS item_name, si.barcode, u.first_name, u.last_name
+        FROM stock_movements m
+        JOIN stock_items si ON m.item_id = si.id
+        JOIN users u ON m.user_id = u.id
+        ORDER BY m.created_at DESC
+        LIMIT ?
+    ''', (limit,)).fetchall()
+    conn.close()
+
+    def fmt(row):
+        d = dict(row)
+        if d['created_at']:
+            try:
+                dt = datetime.fromisoformat(d['created_at'])
+                if dt.tzinfo is not None:
+                    dt = dt.astimezone(chicago_tz)
+                d['created_at'] = dt.strftime('%b %d, %Y %H:%M')
+            except Exception:
+                pass
+        return d
+
+    stock_parts_log = [fmt(r) for r in rows if r['mode'] in ('stock_parts_out', 'stock_parts_in')]
+    cut_keys_log = [fmt(r) for r in rows if r['mode'] == 'cut_key']
+    return stock_parts_log, cut_keys_log
+
 
 @app.route('/api/status')
 @require_kiosk_auth
@@ -526,6 +585,7 @@ def api_checkout():
     
     user_id = data.get('user_id')
     fob_id = data.get('fob_id')
+    property_note = (data.get('property_note') or '').strip() or None
     
     if not user_id or not fob_id:
         return {'error': 'Missing user_id or fob_id'}, 400
@@ -534,11 +594,18 @@ def api_checkout():
     conn = get_db()
     
     try:
+        # If this fob's category requires a property note (Rentables, Lock Box),
+        # enforce it server-side too, not just in the kiosk UI.
+        fob = conn.execute('SELECT category FROM key_fobs WHERE id = ?', (fob_id,)).fetchone()
+        if fob and fob['category'] in PROPERTY_NOTE_REQUIRED_CATEGORIES and not property_note:
+            conn.close()
+            return {'error': 'property_note is required for this category'}, 400
+
         # Insert checkout
         conn.execute('''
-            INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at)
-            VALUES (?, ?, ?, ?)
-        ''', (user_id, fob_id, data.get('kiosk_id', 'station'), datetime.now(chicago_tz).isoformat()))
+            INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at, property_note)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, fob_id, data.get('kiosk_id', 'station'), datetime.now(chicago_tz).isoformat(), property_note))
         conn.commit()
         conn.close()
         
@@ -819,7 +886,9 @@ def api_bulk_checkout():
     data = request.get_json()
     
     user_id = data.get('user_id')
-    fob_ids = data.get('fob_ids', [])  # List of fob table IDs
+    fob_ids = data.get('fob_ids', [])  # List of fob table IDs (backward compatible)
+    # Optional: {fob_id: property_note} for items that require one (Rentables/Lock Box)
+    property_notes = data.get('property_notes', {})
     kiosk_id = data.get('kiosk_id', 'station')
     
     if not user_id or not fob_ids:
@@ -834,6 +903,12 @@ def api_bulk_checkout():
     try:
         for fob_id in fob_ids:
             try:
+                fob = conn.execute('SELECT category FROM key_fobs WHERE id = ?', (fob_id,)).fetchone()
+                note = (property_notes.get(str(fob_id)) or property_notes.get(fob_id) or '').strip() or None
+                if fob and fob['category'] in PROPERTY_NOTE_REQUIRED_CATEGORIES and not note:
+                    errors.append({'fob_id': fob_id, 'error': 'property_note is required for this category'})
+                    continue
+
                 # Check if already checked out
                 existing = conn.execute('''
                     SELECT c.*, u.id as user_id
@@ -851,17 +926,17 @@ def api_bulk_checkout():
                         ''', (datetime.now(chicago_tz).isoformat(), existing['id']))
                         # Check out to new user
                         conn.execute('''
-                            INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at)
-                            VALUES (?, ?, ?, ?)
-                        ''', (user_id, fob_id, kiosk_id, datetime.now(chicago_tz).isoformat()))
+                            INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at, property_note)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (user_id, fob_id, kiosk_id, datetime.now(chicago_tz).isoformat(), note))
                         checked_out.append(fob_id)
                     # else: already checked out to this user, skip
                 else:
                     # Normal checkout
                     conn.execute('''
-                        INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at)
-                        VALUES (?, ?, ?, ?)
-                    ''', (user_id, fob_id, kiosk_id, datetime.now(chicago_tz).isoformat()))
+                        INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at, property_note)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (user_id, fob_id, kiosk_id, datetime.now(chicago_tz).isoformat(), note))
                     checked_out.append(fob_id)
                     
             except Exception as e:
@@ -882,6 +957,213 @@ def api_bulk_checkout():
     except Exception as e:
         conn.close()
         return {'error': str(e)}, 500
+
+
+# ---------------------------------------------------------------------------
+# Stock Parts / Cut Keys
+#
+# These are NOT traditional checkout/checkin. Items are identified by a
+# scanned barcode/UPC/QR code against a small catalog (stock_items), and each
+# scan is written as a row in stock_movements - a simple log of who took what,
+# for which property, and (for Stock Parts) whether it went out or came back.
+#
+#   mode='stock_parts_out'  -> warehouse item leaving for a rental unit
+#   mode='stock_parts_in'   -> unused warehouse item coming back
+#   mode='cut_key'          -> a key blank was cut for a property (one-way,
+#                               there is no "cut_key_in")
+# ---------------------------------------------------------------------------
+
+VALID_STOCK_MODES = ('stock_parts_out', 'stock_parts_in', 'cut_key')
+
+
+@app.route('/api/stock/lookup', methods=['POST'])
+@require_kiosk_auth
+def api_stock_lookup():
+    """Look up a stock item (smoke detector, lock, key blank, ...) by its
+    scanned barcode/UPC/QR code. Returns found=False if it's not in the
+    catalog yet so the kiosk can prompt to register it on the spot."""
+    data = request.get_json()
+    barcode = (data.get('barcode') or '').strip()
+
+    if not barcode:
+        return {'error': 'Missing barcode'}, 400
+
+    conn = get_db()
+    item = conn.execute(
+        'SELECT * FROM stock_items WHERE barcode = ? COLLATE NOCASE AND is_active = 1',
+        (barcode,)
+    ).fetchone()
+    conn.close()
+
+    if not item:
+        return {'found': False, 'barcode': barcode}, 200
+
+    return {'found': True, 'item': dict(item)}, 200
+
+
+@app.route('/api/stock/register', methods=['POST'])
+@require_kiosk_auth
+def api_stock_register():
+    """Register a new stock item (or key blank) the first time its barcode
+    is scanned and it isn't recognized yet."""
+    data = request.get_json()
+
+    barcode = (data.get('barcode') or '').strip()
+    name = (data.get('name') or '').strip()
+    item_type = data.get('item_type', 'stock_part')  # 'stock_part' or 'key_blank'
+    starting_qty = data.get('starting_qty', 0) or 0
+
+    if not barcode or not name:
+        return {'error': 'Missing barcode or name'}, 400
+    if item_type not in ('stock_part', 'key_blank'):
+        return {'error': 'item_type must be stock_part or key_blank'}, 400
+
+    conn = get_db()
+    try:
+        existing = conn.execute('SELECT id FROM stock_items WHERE barcode = ? COLLATE NOCASE', (barcode,)).fetchone()
+        if existing:
+            conn.close()
+            return {'error': 'An item with this barcode already exists'}, 409
+
+        cursor = conn.execute('''
+            INSERT INTO stock_items (barcode, name, item_type, on_hand_qty, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (barcode, name, item_type, int(starting_qty), datetime.now(pytz.timezone('America/Chicago')).isoformat()))
+        conn.commit()
+        item = conn.execute('SELECT * FROM stock_items WHERE id = ?', (cursor.lastrowid,)).fetchone()
+        conn.close()
+        return {'status': 'success', 'item': dict(item)}, 201
+    except Exception as e:
+        conn.close()
+        return {'error': str(e)}, 500
+
+
+@app.route('/api/stock/movement', methods=['POST'])
+@require_kiosk_auth
+def api_stock_movement():
+    """Log one kiosk 'session' of Stock Parts Out/In or Cut Key scans.
+
+    Body:
+    {
+      "user_id": 12,
+      "mode": "stock_parts_out" | "stock_parts_in" | "cut_key",
+      "property_note": "123 Main St",   # required for all three modes
+      "kiosk_id": "kiosk1",
+      "items": [ {"barcode": "0123456789", "quantity": 1}, ... ]
+    }
+    """
+    data = request.get_json()
+
+    user_id = data.get('user_id')
+    mode = data.get('mode')
+    property_note = (data.get('property_note') or '').strip()
+    kiosk_id = data.get('kiosk_id', 'station')
+    items = data.get('items', [])
+
+    if not user_id or not mode or not items:
+        return {'error': 'Missing user_id, mode, or items'}, 400
+    if mode not in VALID_STOCK_MODES:
+        return {'error': f'mode must be one of {VALID_STOCK_MODES}'}, 400
+    if not property_note:
+        return {'error': 'property_note is required'}, 400
+
+    chicago_tz = pytz.timezone('America/Chicago')
+    session_id = str(uuid.uuid4())
+    conn = get_db()
+
+    logged = []
+    errors = []
+
+    try:
+        for entry in items:
+            barcode = (entry.get('barcode') or '').strip()
+            quantity = int(entry.get('quantity', 1) or 1)
+
+            try:
+                item = conn.execute(
+                    'SELECT * FROM stock_items WHERE barcode = ? COLLATE NOCASE AND is_active = 1',
+                    (barcode,)
+                ).fetchone()
+
+                if not item:
+                    errors.append({'barcode': barcode, 'error': 'Item not found - register it first'})
+                    continue
+
+                conn.execute('''
+                    INSERT INTO stock_movements
+                        (session_id, item_id, user_id, mode, quantity, property_note, kiosk_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (session_id, item['id'], user_id, mode, quantity, property_note, kiosk_id,
+                      datetime.now(chicago_tz).isoformat()))
+
+                # stock_parts_out / cut_key reduce on-hand qty; stock_parts_in adds it back.
+                if mode in ('stock_parts_out', 'cut_key'):
+                    new_qty = max(0, item['on_hand_qty'] - quantity)
+                else:  # stock_parts_in
+                    new_qty = item['on_hand_qty'] + quantity
+
+                conn.execute('UPDATE stock_items SET on_hand_qty = ? WHERE id = ?', (new_qty, item['id']))
+
+                logged.append({'barcode': barcode, 'name': item['name'], 'quantity': quantity, 'on_hand_qty': new_qty})
+
+            except Exception as e:
+                errors.append({'barcode': barcode, 'error': str(e)})
+
+        conn.commit()
+        conn.close()
+
+        socketio.emit('status_update', get_current_status())
+
+        return {
+            'status': 'success',
+            'session_id': session_id,
+            'logged': logged,
+            'errors': errors
+        }, 201
+
+    except Exception as e:
+        conn.close()
+        return {'error': str(e)}, 500
+
+
+@app.route('/api/stock/list', methods=['GET'])
+@require_kiosk_auth
+def api_stock_list():
+    """List catalog items, optionally filtered by item_type (stock_part / key_blank)."""
+    item_type = request.args.get('item_type')
+    conn = get_db()
+    if item_type:
+        rows = conn.execute(
+            'SELECT * FROM stock_items WHERE item_type = ? AND is_active = 1 ORDER BY name',
+            (item_type,)
+        ).fetchall()
+    else:
+        rows = conn.execute('SELECT * FROM stock_items WHERE is_active = 1 ORDER BY name').fetchall()
+    conn.close()
+    return {'items': [dict(r) for r in rows]}, 200
+
+
+@app.route('/api/stock/history', methods=['GET'])
+@require_kiosk_auth
+def api_stock_history():
+    """Movement log for admin/reporting, optionally filtered by mode."""
+    mode = request.args.get('mode')
+    conn = get_db()
+    query = '''
+        SELECT m.*, si.name AS item_name, si.barcode, u.first_name, u.last_name
+        FROM stock_movements m
+        JOIN stock_items si ON m.item_id = si.id
+        JOIN users u ON m.user_id = u.id
+    '''
+    params = ()
+    if mode:
+        query += ' WHERE m.mode = ?'
+        params = (mode,)
+    query += ' ORDER BY m.created_at DESC'
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return {'history': [dict(r) for r in rows]}, 200
+
 
 @app.route('/api/user/replace_card', methods=['POST'])
 @require_kiosk_auth
@@ -1130,7 +1412,8 @@ def admin_dashboard():
             kf.vehicle_name,
             c.checked_out_at,
             c.checked_in_at,
-            c.kiosk_id
+            c.kiosk_id,
+            c.property_note
         FROM checkouts c
         JOIN users u ON c.user_id = u.id
         JOIN key_fobs kf ON c.fob_id = kf.id
@@ -1291,8 +1574,17 @@ def admin_dashboard():
             except:
                 pass
     
+    stock_parts_log, cut_keys_log = get_stock_logs()
+    stock_conn = get_db()
+    stock_items = [dict(r) for r in stock_conn.execute(
+        'SELECT * FROM stock_items WHERE is_active = 1 ORDER BY item_type, name'
+    ).fetchall()]
+    stock_conn.close()
+
     return render_template('admin.html', users=users, fobs=fobs, history=history, 
-                          reservations=reservations, past_reservations=past_reservations)
+                          reservations=reservations, past_reservations=past_reservations,
+                          stock_parts_log=stock_parts_log, cut_keys_log=cut_keys_log,
+                          stock_items=stock_items)
 
     
     conn.close()
@@ -1374,7 +1666,8 @@ def export_history():
             kf.fob_id,
             c.checked_out_at,
             c.checked_in_at,
-            c.kiosk_id
+            c.kiosk_id,
+            c.property_note
         FROM checkouts c
         JOIN users u ON c.user_id = u.id
         JOIN key_fobs kf ON c.fob_id = kf.id

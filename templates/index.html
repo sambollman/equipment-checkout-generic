@@ -31,6 +31,13 @@ body {
             gap: 15px;
             margin-top: 20px;
         }
+        .log-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 20px;
+            max-width: 700px;
+        }
         }
         .table-container {
             margin-top: 20px;
@@ -383,6 +390,7 @@ body {
         <button class="tab" data-category="Rentables">📦 Rentables</button>
         <button class="tab" data-category="Tools">🛠️ Tools</button>
         <button class="tab" data-category="Vehicles">🚗 Vehicles</button>
+        <button class="tab" data-category="Lock Box">🔐 Lock Box</button>
         <button class="tab" data-category="Garage">🏠 Garage</button>
         <button class="tab" data-category="Lighting">💡 Lighting</button>
         <button class="tab" data-category="Window Coverings">🪟 Window Coverings</button>
@@ -394,6 +402,8 @@ body {
         <button class="tab" data-category="HVAC">❄️ HVAC</button>
         <button class="tab" data-category="Cleaning">🧹 Cleaning</button>
         <button class="tab" data-category="Discontinued">🚫 Discontinued</button>
+        <button class="tab" data-category="Stock Parts">📤 Stock Parts</button>
+        <button class="tab" data-category="Cut Keys">✂️ Cut Keys</button>
     </div>
 
     <div class="tab-content active" id="Keys-content">
@@ -456,6 +466,58 @@ body {
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
+                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
+                </div>
+            {% else %}
+                <div class="status available">
+                    ✓ Available
+                </div>
+            {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="tab-content " id="Lock Box-content">
+    <div class="grid">
+        {% for key in lock_box %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
+            <div class="vehicle-name">{{ key.vehicle_name }}</div>
+            {% if key.checkout_id %}
+                <div class="status checked-out">
+                    <strong>Checked out to:</strong><br>
+                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
+                    <small>Since {{ key.checked_out_at }}</small>
+                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -1148,6 +1210,47 @@ body {
 
 
 
+<div class="tab-content " id="Stock Parts-content">
+    <div class="log-list">
+        {% for entry in stock_parts_log %}
+        <div class="key-card {% if entry.mode == 'stock_parts_out' %}checked-out{% else %}available{% endif %}" style="text-align:left;">
+            <div class="vehicle-name">
+                {% if entry.mode == 'stock_parts_out' %}📤 OUT{% else %}📥 IN{% endif %}
+                &mdash; {{ entry.item_name }}{% if entry.quantity and entry.quantity > 1 %} (x{{ entry.quantity }}){% endif %}
+            </div>
+            <div class="status {% if entry.mode == 'stock_parts_out' %}checked-out{% else %}available{% endif %}">
+                <strong>{{ entry.first_name }} {{ entry.last_name }}</strong><br>
+                <small>📍 {{ entry.property_note }}</small><br>
+                <small>{{ entry.created_at }}</small>
+            </div>
+        </div>
+        {% else %}
+        <p style="opacity:0.7;">No stock parts activity logged yet.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="tab-content " id="Cut Keys-content">
+    <div class="log-list">
+        {% for entry in cut_keys_log %}
+        <div class="key-card available" style="text-align:left;">
+            <div class="vehicle-name">
+                ✂️ {{ entry.item_name }}{% if entry.quantity and entry.quantity > 1 %} (x{{ entry.quantity }}){% endif %}
+            </div>
+            <div class="status available">
+                <strong>{{ entry.first_name }} {{ entry.last_name }}</strong><br>
+                <small>📍 {{ entry.property_note }}</small><br>
+                <small>{{ entry.created_at }}</small>
+            </div>
+        </div>
+        {% else %}
+        <p style="opacity:0.7;">No key cutting activity logged yet.</p>
+        {% endfor %}
+    </div>
+</div>
+
+
+
     <script>
         // Dark mode toggle functionality
         const toggle = document.getElementById('darkModeToggle');
@@ -1206,6 +1309,7 @@ body {
             updateSection('Rentables', data.rentables);
             updateSection('Tools', data.tools);
             updateSection('Vehicles', data.vehicles);
+            updateSection('Lock Box', data.lock_box);
             updateSection('Garage', data.garage);
             updateSection('Lighting', data.lighting);
             updateSection('Window Coverings', data.window_coverings);
@@ -1217,6 +1321,41 @@ body {
             updateSection('HVAC', data.hvac);
             updateSection('Cleaning', data.cleaning);
             updateSection('Discontinued', data.discontinued);
+            updateStockLogSection('Stock Parts', data.stock_parts_log, false);
+            updateStockLogSection('Cut Keys', data.cut_keys_log, true);
+        }
+
+        // Renders the log-style tabs (Stock Parts / Cut Keys) - these show
+        // recent activity, not available/checked-out cards.
+        function updateStockLogSection(category, entries, isCutKeys) {
+            if (!entries) return;
+            const contentDiv = document.getElementById(`${category}-content`);
+            if (!contentDiv) return;
+            const listDiv = contentDiv.querySelector('.log-list');
+            if (!listDiv) return;
+
+            if (entries.length === 0) {
+                listDiv.innerHTML = `<p style="opacity:0.7;">No activity logged yet.</p>`;
+                return;
+            }
+
+            listDiv.innerHTML = entries.map(entry => {
+                const qtyText = (entry.quantity && entry.quantity > 1) ? ` (x${entry.quantity})` : '';
+                const title = isCutKeys
+                    ? `✂️ ${entry.item_name}${qtyText}`
+                    : `${entry.mode === 'stock_parts_out' ? '📤 OUT' : '📥 IN'} &mdash; ${entry.item_name}${qtyText}`;
+                const statusClass = (!isCutKeys && entry.mode === 'stock_parts_out') ? 'checked-out' : 'available';
+                return `
+                    <div class="key-card ${statusClass}" style="text-align:left;">
+                        <div class="vehicle-name">${title}</div>
+                        <div class="status ${statusClass}">
+                            <strong>${entry.first_name} ${entry.last_name}</strong><br>
+                            <small>📍 ${entry.property_note}</small><br>
+                            <small>${entry.created_at}</small>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
         
         function updateSection(category, items) {
@@ -1237,6 +1376,7 @@ body {
                             <strong>Checked out to:</strong><br>
                             ${key.first_name} ${key.last_name}<br>
                             <small>Since ${key.checked_out_at}</small>
+                            ${key.property_note ? `<br><small>📍 ${key.property_note}</small>` : ''}
                         </div>
                     ` : `
                         <div class="status available">

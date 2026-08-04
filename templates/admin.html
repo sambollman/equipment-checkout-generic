@@ -343,6 +343,9 @@
     <button class="tab" data-category="Recent Checkout History">📋 Recent History</button>
     <button class="tab" data-category="Active Reservations">📅 Active Reservations</button>
     <button class="tab" data-category="Past Reservations">📅 Past Reservations</button>
+    <button class="tab" data-category="Stock Parts Log">📤 Stock Parts Log</button>
+    <button class="tab" data-category="Cut Keys Log">✂️ Cut Keys Log</button>
+    <button class="tab" data-category="Stock Items">📦 Stock Items Catalog</button>
 </div>    
 
 
@@ -411,7 +414,8 @@
                     <option value="Vehicles">Vehicles</option>
                     <option value="Equipment">Equipment</option>
                     <option value="Tools">Tools</option>
-                    <option value="Equipment">Equipment</option>
+                    <option value="Rentables">Rentables</option>
+                    <option value="Lock Box">Lock Box</option>
                     <option value="Other">Other</option>
                 </select>
             </label><br>
@@ -563,6 +567,7 @@
                 <th>Checked Out</th>
                 <th>Checked In</th>
                 <th>Kiosk</th>
+                <th>Property</th>
             </tr>
             {% for entry in history %}
             <tr>
@@ -577,7 +582,86 @@
                     {% endif %}
                 </td>
                 <td>{{ entry.kiosk_id }}</td>
+                <td>{{ entry.property_note or '' }}</td>
             </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+<!-- Stock Parts Log Tab Content -->
+<div class="tab-content" id="Stock Parts Log-content">
+    <div style="overflow-x: auto;">
+        <table>
+            <tr>
+                <th>Direction</th>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Employee</th>
+                <th>Property</th>
+                <th>When</th>
+            </tr>
+            {% for entry in stock_parts_log %}
+            <tr>
+                <td>{% if entry.mode == 'stock_parts_out' %}📤 Out{% else %}📥 In{% endif %}</td>
+                <td>{{ entry.item_name }}</td>
+                <td>{{ entry.quantity }}</td>
+                <td>{{ entry.first_name }} {{ entry.last_name }}</td>
+                <td>{{ entry.property_note }}</td>
+                <td>{{ entry.created_at }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6">No stock parts activity logged yet.</td></tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+<!-- Cut Keys Log Tab Content -->
+<div class="tab-content" id="Cut Keys Log-content">
+    <div style="overflow-x: auto;">
+        <table>
+            <tr>
+                <th>Key Blank</th>
+                <th>Qty</th>
+                <th>Employee</th>
+                <th>Property</th>
+                <th>When</th>
+            </tr>
+            {% for entry in cut_keys_log %}
+            <tr>
+                <td>✂️ {{ entry.item_name }}</td>
+                <td>{{ entry.quantity }}</td>
+                <td>{{ entry.first_name }} {{ entry.last_name }}</td>
+                <td>{{ entry.property_note }}</td>
+                <td>{{ entry.created_at }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5">No key cutting activity logged yet.</td></tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+<!-- Stock Items Catalog Tab Content -->
+<div class="tab-content" id="Stock Items-content">
+    <div style="overflow-x: auto;">
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Barcode</th>
+                <th>Type</th>
+                <th>On Hand Qty</th>
+            </tr>
+            {% for item in stock_items %}
+            <tr>
+                <td>{{ item.name }}</td>
+                <td>{{ item.barcode }}</td>
+                <td>{{ 'Key Blank' if item.item_type == 'key_blank' else 'Stock Part' }}</td>
+                <td>{{ item.on_hand_qty }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4">No stock items registered yet - they get added automatically the first time they're scanned at the kiosk.</td></tr>
             {% endfor %}
         </table>
     </div>

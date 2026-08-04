@@ -29,6 +29,10 @@ class KioskGUI:
         self.bulk_items = []
         self.add_new_mode = False
 
+        # Stock Parts / Cut Keys - log-only modes (not check-out/check-in).
+        # self.stock_mode is one of: None, 'stock_parts_out', 'stock_parts_in', 'cut_key'
+        self.stock_mode = None
+        self.stock_scanned_items = []  # [{'barcode', 'name', 'quantity', 'on_hand_qty'}]
 
         # Create main window
         self.root = tk.Tk()
@@ -187,17 +191,20 @@ class KioskGUI:
                 return False, None
             return False, str(e)
 
-    def checkout_api(self, user_id, fob_id):
+    def checkout_api(self, user_id, fob_id, property_note=None):
             """Checkout via API"""
             try:
+                payload = {
+                    'user_id': user_id,
+                    'fob_id': fob_id,
+                    'kiosk_id': self.kiosk_id
+                }
+                if property_note:
+                    payload['property_note'] = property_note
                 response = requests.post(
                     f'{SERVER_URL}/api/checkout',
                     auth=(KIOSK_USER, KIOSK_PASS),
-                    json={
-                        'user_id': user_id,
-                        'fob_id': fob_id,
-                        'kiosk_id': self.kiosk_id
-                    },
+                    json=payload,
                     timeout=5
                 )
                 if response.status_code == 201:
@@ -258,6 +265,80 @@ class KioskGUI:
                 return False, None
             return False, str(e)
     
+    # -----------------------------------------------------------------
+    # Stock Parts / Cut Keys API helpers
+    # -----------------------------------------------------------------
+    def stock_lookup_api(self, barcode):
+        """Look up a stock item / key blank by scanned barcode.
+        Returns (found: bool, item_dict_or_None)"""
+        try:
+            response = requests.post(
+                f'{SERVER_URL}/api/stock/lookup',
+                auth=(KIOSK_USER, KIOSK_PASS),
+                json={'barcode': barcode},
+                timeout=5
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('found'):
+                    return True, data['item']
+                return False, None
+            return False, None
+        except Exception as e:
+            if self.is_network_error(e):
+                self.show_offline_screen()
+                return False, 'OFFLINE'
+            return False, None
+
+    def stock_register_api(self, barcode, name, item_type):
+        """Register a new stock item / key blank the first time it's scanned.
+        Returns (success: bool, item_dict_or_error)"""
+        try:
+            response = requests.post(
+                f'{SERVER_URL}/api/stock/register',
+                auth=(KIOSK_USER, KIOSK_PASS),
+                json={'barcode': barcode, 'name': name, 'item_type': item_type},
+                timeout=5
+            )
+            if response.status_code == 201:
+                return True, response.json()['item']
+            else:
+                error_msg = response.json().get('error', 'Unknown error')
+                return False, error_msg
+        except Exception as e:
+            if self.is_network_error(e):
+                self.show_offline_screen()
+                return False, None
+            return False, str(e)
+
+    def stock_movement_api(self, user_id, mode, property_note, items):
+        """Log a Stock Parts Out/In or Cut Key session.
+        items: [{'barcode': ..., 'quantity': ...}, ...]
+        Returns (success: bool, result_dict_or_error)"""
+        try:
+            response = requests.post(
+                f'{SERVER_URL}/api/stock/movement',
+                auth=(KIOSK_USER, KIOSK_PASS),
+                json={
+                    'user_id': user_id,
+                    'mode': mode,
+                    'property_note': property_note,
+                    'kiosk_id': self.kiosk_id,
+                    'items': items
+                },
+                timeout=10
+            )
+            if response.status_code == 201:
+                return True, response.json()
+            else:
+                error_msg = response.json().get('error', 'Unknown error')
+                return False, error_msg
+        except Exception as e:
+            if self.is_network_error(e):
+                self.show_offline_screen()
+                return False, None
+            return False, str(e)
+
     def replace_card_api(self, user_id, new_card_id):
         """Replace user's card via API"""
         try:
@@ -517,6 +598,44 @@ class KioskGUI:
         
         dialog.wait_window()
         return result[0]
+
+    # Categories where an item physically leaves and gets left at a property -
+    # we require a free-text note of which property it's going to.
+    PROPERTY_NOTE_CATEGORIES = ('Rentables', 'Lock Box')
+
+    def prompt_property_note(self, item_label):
+        """Show a REQUIRED text prompt for which property an item is going to.
+        Keeps re-prompting until something is entered, or returns None if the
+        person cancels (caller should abort the checkout in that case)."""
+        while True:
+            value = self.get_text_input(
+                f"Which property is '{item_label}' going to?",
+                title="Property Required"
+            )
+            if value is None:
+                # User hit Cancel
+                return None
+            value = value.strip()
+            if value:
+                return value
+            # Empty entry - this field is required, ask again
+            self.show_error_inline("A property is required to continue.")
+
+    def show_error_inline(self, message):
+        """Small non-navigating error popup (doesn't leave the current screen)."""
+        from tkinter import Toplevel, Label, Button
+        dialog = Toplevel(self.root)
+        dialog.title("Required")
+        dialog.geometry("500x220")
+        dialog.configure(bg='white')
+        dialog.transient(self.root)
+        dialog.grab_set()
+        Label(dialog, text="⚠️", font=font.Font(size=50), bg='white', fg='#FF9800').pack(pady=(20, 10))
+        Label(dialog, text=message, font=font.Font(size=16), bg='white',
+              wraplength=450, justify='center').pack(pady=(0, 20))
+        Button(dialog, text="OK", command=dialog.destroy, font=font.Font(size=14),
+               width=10, height=2).pack()
+        dialog.wait_window()
 
     def start_replace_card_mode(self):
         """Start the process to replace a lost/broken card"""
@@ -860,6 +979,8 @@ class KioskGUI:
         self.bulk_checkout_mode = False
         self.bulk_items = []
         self.add_new_mode = False
+        self.stock_mode = None
+        self.stock_scanned_items = []
     
         # Big icon/emoji
         icon_label = tk.Label(
@@ -958,6 +1079,46 @@ class KioskGUI:
             command=self.start_add_new
         )
         add_new_btn.pack(side='left', padx=10)
+
+        # Button container - Fourth row (log-only modes: Stock Parts / Cut Keys)
+        button_frame4 = tk.Frame(self.message_frame, bg='black')
+        button_frame4.pack(pady=10)
+
+        stock_out_btn = tk.Button(
+            button_frame4,
+            text="📤 Stock Parts Out",
+            font=font.Font(size=16, weight='bold'),
+            bg='#795548',
+            fg='white',
+            width=16,
+            height=2,
+            command=lambda: self.start_stock_mode('stock_parts_out')
+        )
+        stock_out_btn.pack(side='left', padx=10)
+
+        stock_in_btn = tk.Button(
+            button_frame4,
+            text="📥 Stock Parts In",
+            font=font.Font(size=16, weight='bold'),
+            bg='#8D6E63',
+            fg='white',
+            width=16,
+            height=2,
+            command=lambda: self.start_stock_mode('stock_parts_in')
+        )
+        stock_in_btn.pack(side='left', padx=10)
+
+        cut_key_btn = tk.Button(
+            button_frame4,
+            text="✂️ Cut Key",
+            font=font.Font(size=16, weight='bold'),
+            bg='#607D8B',
+            fg='white',
+            width=16,
+            height=2,
+            command=lambda: self.start_stock_mode('cut_key')
+        )
+        cut_key_btn.pack(side='left', padx=10)
 
         # Instructions
         self.entry.focus_set()
@@ -1324,7 +1485,295 @@ class KioskGUI:
         self.add_new_mode = False
         self.current_user = None
         self.show_welcome()
-    
+
+    # -----------------------------------------------------------------
+    # Stock Parts Out / Stock Parts In / Cut Key
+    #
+    # These are log-only modes, not traditional checkout/checkin:
+    #   1) employee scans their keycard
+    #   2) employee scans one or more items (barcode/UPC/QR)
+    #   3) employee hits Done
+    #   4) employee enters (required) the property this is for
+    #   5) session is logged in one shot via /api/stock/movement
+    # -----------------------------------------------------------------
+
+    STOCK_MODE_LABELS = {
+        'stock_parts_out': ('📤', '#795548', 'Stock Parts Out'),
+        'stock_parts_in':  ('📥', '#8D6E63', 'Stock Parts In'),
+        'cut_key':         ('✂️', '#607D8B', 'Cut Key'),
+    }
+
+    def start_stock_mode(self, mode):
+        """Enter Stock Parts Out/In or Cut Key mode"""
+        self.stock_mode = mode
+        self.stock_scanned_items = []
+        self.current_user = None
+        self.clear_message_frame()
+
+        icon, color, label = self.STOCK_MODE_LABELS[mode]
+
+        icon_label = tk.Label(
+            self.message_frame,
+            text=icon,
+            font=font.Font(size=120),
+            fg=color,
+            bg='black'
+        )
+        icon_label.pack(pady=(50, 30))
+
+        msg_label = tk.Label(
+            self.message_frame,
+            text=f"{label}\n\nScan your employee keycard to begin",
+            font=self.header_font,
+            fg=color,
+            bg='black',
+            justify='center'
+        )
+        msg_label.pack(pady=(0, 20))
+
+        cancel_btn = tk.Button(
+            self.message_frame,
+            text="❌ Cancel",
+            font=font.Font(size=16, weight='bold'),
+            bg='#f44336',
+            fg='white',
+            width=15,
+            height=2,
+            command=self.cancel_stock_mode
+        )
+        cancel_btn.pack(pady=20)
+
+        self.instructions_label.config(text="Scan your employee keycard to continue")
+        self.last_scan_time = datetime.now()
+
+    def cancel_stock_mode(self):
+        """Cancel Stock Parts / Cut Key mode and return to welcome"""
+        self.stock_mode = None
+        self.stock_scanned_items = []
+        self.current_user = None
+        self.show_welcome()
+
+    def show_stock_scanning(self):
+        """Show the scan-items screen for the current stock mode, with running list"""
+        self.clear_message_frame()
+        icon, color, label = self.STOCK_MODE_LABELS[self.stock_mode]
+
+        if self.current_user:
+            header_text = f"{icon} {label} - {self.current_user['first_name']} {self.current_user['last_name']}"
+        else:
+            header_text = f"{icon} {label}"
+
+        header_label = tk.Label(
+            self.message_frame,
+            text=header_text,
+            font=font.Font(size=20, weight='bold'),
+            fg=color,
+            bg='black'
+        )
+        header_label.pack(pady=(20, 10))
+
+        if self.stock_mode == 'cut_key':
+            instruction_text = "Scan the key blank(s) you're cutting"
+        elif self.stock_mode == 'stock_parts_in':
+            instruction_text = "Scan the item(s) you're returning to stock"
+        else:
+            instruction_text = "Scan the item(s) you're taking"
+
+        instruction_label = tk.Label(
+            self.message_frame,
+            text=instruction_text,
+            font=self.body_font,
+            fg='white',
+            bg='black'
+        )
+        instruction_label.pack(pady=(0, 20))
+
+        list_frame = tk.Frame(self.message_frame, bg='black')
+        list_frame.pack(pady=10, fill='both', expand=True)
+
+        if self.stock_scanned_items:
+            for item in self.stock_scanned_items:
+                qty_text = f" x{item['quantity']}" if item['quantity'] > 1 else ""
+                item_label = tk.Label(
+                    list_frame,
+                    text=f"✅ {item['name']}{qty_text}",
+                    font=font.Font(size=16),
+                    fg=color,
+                    bg='black',
+                    anchor='w'
+                )
+                item_label.pack(pady=5, padx=20, fill='x')
+        else:
+            placeholder_label = tk.Label(
+                list_frame,
+                text="(No items scanned yet)",
+                font=font.Font(size=16),
+                fg='#666',
+                bg='black'
+            )
+            placeholder_label.pack(pady=5)
+
+        button_frame = tk.Frame(self.message_frame, bg='black')
+        button_frame.pack(pady=20)
+
+        done_btn = tk.Button(
+            button_frame,
+            text="✅ Done",
+            font=font.Font(size=18, weight='bold'),
+            bg=color,
+            fg='white',
+            width=12,
+            height=2,
+            command=self.complete_stock_session
+        )
+        done_btn.pack(side='left', padx=10)
+
+        cancel_btn = tk.Button(
+            button_frame,
+            text="❌ Cancel",
+            font=font.Font(size=18, weight='bold'),
+            bg='#f44336',
+            fg='white',
+            width=12,
+            height=2,
+            command=self.cancel_stock_mode
+        )
+        cancel_btn.pack(side='left', padx=10)
+
+        self.instructions_label.config(text=f"{len(self.stock_scanned_items)} item(s) scanned • Timeout in 60 seconds")
+
+    def handle_stock_scan(self, scan_data):
+        """Route a scan while in Stock Parts / Cut Key mode"""
+        if not self.current_user:
+            # First scan must be the employee's keycard
+            found, user = self.lookup_api('user', scan_data)
+            if not found or not user:
+                self.show_error("Unknown card. Please register at the admin panel.")
+                return
+            self.current_user = user
+            self.show_stock_scanning()
+            self.last_scan_time = datetime.now()
+            return
+
+        # Subsequent scans are item barcodes/UPCs/QR codes against the stock catalog
+        found, item = self.stock_lookup_api(scan_data)
+
+        if item == 'OFFLINE':
+            return
+
+        if found and item:
+            self.add_stock_scanned_item(item['barcode'], item['name'])
+            return
+
+        # Not in the catalog yet - only offer to register it when taking
+        # something OUT (stock_parts_out / cut_key). You can't return an item
+        # to stock that was never catalogued.
+        if self.stock_mode == 'stock_parts_in':
+            self.show_error("Item not recognized. It must already be in the system to log it back in.")
+            return
+
+        item_type = 'key_blank' if self.stock_mode == 'cut_key' else 'stock_part'
+        prompt = "New key blank - what size/type is this?" if self.stock_mode == 'cut_key' else "New item - what is this?"
+        name = self.get_text_input(prompt, title="Register Item")
+        self.last_scan_time = datetime.now()
+
+        if not name or not name.strip():
+            self.show_error("Registration cancelled")
+            self.root.after(1500, self.show_stock_scanning)
+            return
+
+        success, result = self.stock_register_api(scan_data, name.strip(), item_type)
+        if not success:
+            self.show_error(f"Could not register item: {result}")
+            self.root.after(2000, self.show_stock_scanning)
+            return
+
+        self.add_stock_scanned_item(result['barcode'], result['name'])
+
+    def add_stock_scanned_item(self, barcode, name):
+        """Add a scanned item to the current session list, or bump its quantity
+        if it's already been scanned once this session"""
+        for item in self.stock_scanned_items:
+            if item['barcode'] == barcode:
+                item['quantity'] += 1
+                self.show_stock_scanning()
+                self.last_scan_time = datetime.now()
+                return
+
+        self.stock_scanned_items.append({'barcode': barcode, 'name': name, 'quantity': 1})
+
+        # Brief confirmation, then back to the scanning screen
+        self.clear_message_frame()
+        tk.Label(self.message_frame, text="✅", font=font.Font(size=80),
+                 fg='#4CAF50', bg='black').pack(pady=(50, 20))
+        tk.Label(self.message_frame, text=f"{name}\nadded!",
+                 font=self.header_font, fg='#4CAF50', bg='black', justify='center').pack()
+        self.root.after(900, self.show_stock_scanning)
+        self.last_scan_time = datetime.now()
+
+    def complete_stock_session(self):
+        """Done button - prompt for the required property, then submit the whole session"""
+        if not self.current_user:
+            self.show_stock_scanning()
+            return
+
+        if not self.stock_scanned_items:
+            self.show_error_inline("Scan at least one item before hitting Done.")
+            self.show_stock_scanning()
+            return
+
+        icon, color, label = self.STOCK_MODE_LABELS[self.stock_mode]
+        property_note = self.prompt_property_note_generic(
+            "Which property is this for?"
+        )
+        if not property_note:
+            # Cancelled - stay on the scanning screen rather than losing the list
+            self.show_stock_scanning()
+            return
+
+        items_payload = [{'barcode': i['barcode'], 'quantity': i['quantity']} for i in self.stock_scanned_items]
+
+        success, result = self.stock_movement_api(
+            self.current_user['id'], self.stock_mode, property_note, items_payload
+        )
+
+        if not success:
+            self.show_error(f"Failed to log: {result}")
+            return
+
+        self.notify_server()
+
+        self.clear_message_frame()
+        tk.Label(self.message_frame, text="✅", font=font.Font(size=120),
+                 fg=color, bg='black').pack(pady=(50, 30))
+        tk.Label(self.message_frame, text=f"{label} logged!",
+                 font=self.header_font, fg=color, bg='black').pack(pady=(0, 10))
+        tk.Label(self.message_frame, text=f"{len(items_payload)} item(s) • {property_note}",
+                 font=self.body_font, fg='white', bg='black', wraplength=700, justify='center').pack()
+
+        errors = result.get('errors') if isinstance(result, dict) else None
+        if errors:
+            tk.Label(self.message_frame, text=f"⚠️ {len(errors)} item(s) failed to log",
+                     font=self.small_font, fg='#FF9800', bg='black').pack(pady=(10, 0))
+
+        self.stock_mode = None
+        self.stock_scanned_items = []
+        self.current_user = None
+        self.instructions_label.config(text="")
+        self.root.after(2500, self.show_welcome)
+
+    def prompt_property_note_generic(self, prompt_text):
+        """Same required-field behavior as prompt_property_note, but with a
+        caller-supplied prompt (used by Stock Parts / Cut Keys)."""
+        while True:
+            value = self.get_text_input(prompt_text, title="Property Required")
+            if value is None:
+                return None
+            value = value.strip()
+            if value:
+                return value
+            self.show_error_inline("A property is required to continue.")
+
     def add_note(self):
         """Button handler for adding note"""
         self.start_note_mode()
@@ -1530,6 +1979,11 @@ class KioskGUI:
             self.handle_fob_scan(scan_data)
             return
 
+        # Stock Parts / Cut Keys - bypass the normal user/fob lookup since item
+        # scans here are barcodes/UPCs against a separate catalog, not key_fobs.
+        if self.stock_mode:
+            self.handle_stock_scan(scan_data)
+            return
 
         # Look up via API
         found, data = self.lookup_api('scan', scan_data)
@@ -1772,7 +2226,14 @@ class KioskGUI:
                     return
 
             # Check out the pending fob via API
-            success, error = self.checkout_api(user['id'], self.pending_fob['id'])
+            property_note = None
+            if self.pending_fob.get('category') in self.PROPERTY_NOTE_CATEGORIES:
+                property_note = self.prompt_property_note(self.pending_fob['vehicle_name'])
+                if not property_note:
+                    self.pending_fob = None
+                    self.show_welcome()
+                    return
+            success, error = self.checkout_api(user['id'], self.pending_fob['id'], property_note=property_note)
             if not success:
                 self.pending_fob = None
                 self.show_error(f"Checkout failed: {error}")
@@ -1940,7 +2401,7 @@ class KioskGUI:
             
             # Dropdown for category
             category_var = tk.StringVar(value="Keys")
-            categories = ["Discontinued", "Rentables", "Garage", "Lighting", "Tools", "Window Coverings", "Key Room", "Electrical", "Hardware", "Plumbing", "Building Materials", "HVAC", "Cleaning", "Vehicles", "Keys"]
+            categories = ["Discontinued", "Rentables", "Garage", "Lighting", "Tools", "Window Coverings", "Key Room", "Electrical", "Hardware", "Plumbing", "Building Materials", "HVAC", "Cleaning", "Vehicles", "Keys", "Lock Box"]
             
             dropdown = ttk.Combobox(dialog, textvariable=category_var, values=categories, 
                                    font=font.Font(size=16), state='readonly', width=20)
@@ -1972,7 +2433,13 @@ class KioskGUI:
             # If user already scanned card, check out the new fob immediately
             if self.current_user:
                 # Checkout via API
-                success, error = self.checkout_api(self.current_user['id'], fob['id'])
+                property_note = None
+                if fob.get('category') in self.PROPERTY_NOTE_CATEGORIES:
+                    property_note = self.prompt_property_note(fob['vehicle_name'])
+                    if not property_note:
+                        self.show_welcome()
+                        return
+                success, error = self.checkout_api(self.current_user['id'], fob['id'], property_note=property_note)
                 if not success:
                     self.show_error(f"Checkout failed: {error}")
                     return
@@ -2041,7 +2508,13 @@ class KioskGUI:
                     return
                 
                 # Then check out to new user
-                success, error = self.checkout_api(self.current_user['id'], fob['id'])
+                property_note = None
+                if fob.get('category') in self.PROPERTY_NOTE_CATEGORIES:
+                    property_note = self.prompt_property_note(fob['vehicle_name'])
+                    if not property_note:
+                        self.show_welcome()
+                        return
+                success, error = self.checkout_api(self.current_user['id'], fob['id'], property_note=property_note)
                 if not success:
                     self.show_error(f"Checkout failed: {error}")
                     return
@@ -2179,7 +2652,13 @@ class KioskGUI:
 
   
                 # Checkout via API
-                success, error = self.checkout_api(self.current_user['id'], fob['id'])
+                property_note = None
+                if fob.get('category') in self.PROPERTY_NOTE_CATEGORIES:
+                    property_note = self.prompt_property_note(fob['vehicle_name'])
+                    if not property_note:
+                        self.show_welcome()
+                        return
+                success, error = self.checkout_api(self.current_user['id'], fob['id'], property_note=property_note)
                 if not success:
                     self.show_error(f"Checkout failed: {error}")
                     return
@@ -2230,7 +2709,7 @@ class KioskGUI:
 
     def check_timeout_loop(self):
         """Check for session timeout"""
-        if (self.current_user or self.replace_mode or self.note_mode or self.pending_fob) and self.last_scan_time:
+        if (self.current_user or self.replace_mode or self.note_mode or self.pending_fob or self.stock_mode) and self.last_scan_time:
             elapsed = (datetime.now() - self.last_scan_time).total_seconds()
             if elapsed > self.scan_timeout:
                 self.show_error("Session timeout")
@@ -2240,6 +2719,8 @@ class KioskGUI:
                 self.replace_item = None
                 self.last_scan_time = None
                 self.note_mode = False
+                self.stock_mode = None
+                self.stock_scanned_items = []
       
         # Check again in 1 second
         self.root.after(1000, self.check_timeout_loop)
