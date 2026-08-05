@@ -498,7 +498,7 @@ def register_equipment():
     fob_id = data.get('fob_id')
     vehicle_name = data.get('vehicle_name')
     category = data.get('category', 'Equipment')
-    location = data.get('location', 'Station')
+    location = data.get('location', 'Shop')
     
     if not fob_id or not vehicle_name:
         return {'error': 'Missing required fields'}, 400

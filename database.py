@@ -34,7 +34,7 @@ def init_db():
             fob_id TEXT UNIQUE NOT NULL,
             vehicle_name TEXT NOT NULL,
 	    category TEXT DEFAULT 'Vehicle',	
-            location TEXT DEFAULT 'Station',
+            location TEXT DEFAULT 'Shop',
             registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             is_active BOOLEAN DEFAULT 1
         )

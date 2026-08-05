@@ -2415,7 +2415,7 @@ class KioskGUI:
             category = result[0] if result[0] else "Keys"
             self.last_scan_time = datetime.now()  # Reset timeout
             
-            location = self.get_text_input("Location (press OK for 'Station'):", title="Location") or "Station"
+            location = self.get_text_input("Location (press OK for 'Shop'):", title="Location") or "Shop"
             self.last_scan_time = datetime.now()  # Reset timeout
 
 
