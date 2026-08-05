@@ -240,17 +240,20 @@ class KioskGUI:
                     return False, None
                 return False, str(e)
 
-    def bulk_checkout_api(self, user_id, fob_ids):
+    def bulk_checkout_api(self, user_id, fob_ids, property_notes=None):
         """Bulk checkout multiple items via API"""
         try:
+            payload = {
+                'user_id': user_id,
+                'fob_ids': fob_ids,
+                'kiosk_id': self.kiosk_id
+            }
+            if property_notes:
+                payload['property_notes'] = property_notes
             response = requests.post(
                 f'{SERVER_URL}/api/bulk_checkout',
                 auth=(KIOSK_USER, KIOSK_PASS),
-                json={
-                    'user_id': user_id,
-                    'fob_ids': fob_ids,
-                    'kiosk_id': self.kiosk_id
-                },
+                json=payload,
                 timeout=10
             )
             if response.status_code == 201:
@@ -1421,7 +1424,22 @@ class KioskGUI:
         
         # Bulk checkout via API
         fob_ids = [fob['id'] for fob in items_to_checkout]
-        success, result = self.bulk_checkout_api(self.current_user['id'], fob_ids)
+
+        # If any items being checked out need a property (Rentables, Lock Box),
+        # ask for it ONCE and apply that same property to all of them - not a
+        # separate prompt per item.
+        property_notes = None
+        items_needing_property = [fob for fob in items_to_checkout
+                                   if fob.get('category') in self.PROPERTY_NOTE_CATEGORIES]
+        if items_needing_property:
+            note = self.prompt_property_note_generic("Which property is this batch going to?")
+            if not note:
+                # Cancelled - stay on the bulk scanning screen so nothing is lost
+                self.show_bulk_scanning()
+                return
+            property_notes = {str(fob['id']): note for fob in items_needing_property}
+
+        success, result = self.bulk_checkout_api(self.current_user['id'], fob_ids, property_notes=property_notes)
 
         if not success:
             self.show_error(f"Bulk checkout failed: {result}")

@@ -8,7 +8,7 @@
         th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
         th { background-color: #4CAF50; color: white; }
         .add-form { margin: 20px 0; padding: 20px; background: #f5f5f5; }
-        input[type="text"] { padding: 8px; width: 300px; }
+        input[type="text"], input[type="password"] { padding: 8px; width: 300px; }
         button { padding: 8px 16px; background: #4CAF50; color: white; border: none; cursor: pointer; }
         button:hover { background: #45a049; }
         .delete-btn { background: #f44336; }
@@ -24,7 +24,8 @@
     <div class="add-form">
         <h3>Add New Admin</h3>
         <form method="POST" action="/admin/admins/add">
-            <input type="text" name="username" placeholder="Username (e.g., john.smith or john.smith@company.com)" required>
+            <input type="text" name="username" placeholder="Username (e.g., nate or nate@company.com)" required><br>
+            <input type="password" name="password" placeholder="Password" required style="margin-top: 10px;">
             <button type="submit">Add Admin</button>
         </form>
     </div>

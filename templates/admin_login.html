@@ -23,7 +23,7 @@
             margin-top: 0;
             color: #333;
         }
-        input[type="password"] {
+        input[type="text"], input[type="password"] {
             width: 100%;
             padding: 10px;
             margin: 10px 0;
@@ -61,7 +61,8 @@
     <div class="login-box">
         <h2>Admin Login</h2>
         <form method="POST">
-            <input type="password" name="password" placeholder="Password" required autofocus>
+            <input type="text" name="username" placeholder="Username" required autofocus>
+            <input type="password" name="password" placeholder="Password" required>
             <button type="submit">Login</button>
         </form>
         {% if error %}

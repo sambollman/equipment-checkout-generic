@@ -829,19 +829,59 @@ def dashboard_logout():
     return redirect(url_for('dashboard_login'))
 
 # Admin login - only available if ADMIN_PASSWORD is set
-if ADMIN_PASSWORD:
-    @app.route('/admin/login', methods=['GET', 'POST'])
-    def admin_login():
-        """Admin login page (development/emergency use only)"""
-        if request.method == 'POST':
-            password = request.form.get('password')
-            if password == ADMIN_PASSWORD:
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    """Admin login - real per-admin username/password, stored in admin_users.
+
+    One-time bootstrap: if no admin account has a real password set yet,
+    a login attempt whose password matches the legacy ADMIN_PASSWORD env
+    var will create (or upgrade) that username as the first real admin.
+    This only ever fires once - as soon as any admin has a real password
+    hash, the legacy shared password can no longer create/promote accounts.
+    """
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+
+        conn = get_db()
+        try:
+            real_admin_count = conn.execute(
+                "SELECT COUNT(*) as c FROM admin_users WHERE password_hash != ''"
+            ).fetchone()['c']
+
+            admin = conn.execute(
+                'SELECT * FROM admin_users WHERE username = ? COLLATE NOCASE', (username,)
+            ).fetchone()
+
+            login_ok = False
+
+            if admin and admin['password_hash'] and hash_password(password) == admin['password_hash']:
+                login_ok = True
+            elif real_admin_count == 0 and ADMIN_PASSWORD and username and password == ADMIN_PASSWORD:
+                # First-time bootstrap of this username as a real admin account
+                pw_hash = hash_password(password)
+                if admin:
+                    conn.execute('UPDATE admin_users SET password_hash = ? WHERE id = ?',
+                                 (pw_hash, admin['id']))
+                else:
+                    conn.execute('INSERT INTO admin_users (username, password_hash) VALUES (?, ?)',
+                                 (username, pw_hash))
+                conn.commit()
+                login_ok = True
+
+            conn.close()
+
+            if login_ok:
                 session['admin'] = True
+                session['admin_username'] = username
                 return redirect(url_for('admin_dashboard'))
             else:
-                return render_template('admin_login.html', error='Invalid password')
-        
-        return render_template('admin_login.html')
+                return render_template('admin_login.html', error='Invalid username or password')
+        except Exception:
+            conn.close()
+            raise
+
+    return render_template('admin_login.html')
 
 @app.route('/api/bulk_checkout', methods=['POST'])
 @require_kiosk_auth
@@ -2269,16 +2309,18 @@ def manage_admin_users():
 
 @app.route('/admin/admins/add', methods=['POST'])
 def add_admin_user():
-    """Add new admin user"""
+    """Add new admin user with a real username + password"""
     if not session.get('admin'):
         return redirect('/admin/login')
     
-    username = request.form.get('username')
+    username = (request.form.get('username') or '').strip()
+    password = request.form.get('password') or ''
     
-    if username:
+    if username and password:
         conn = get_db()
         try:
-            conn.execute('INSERT INTO admin_users (username, password_hash) VALUES (?, ?)', (username, ''))
+            conn.execute('INSERT INTO admin_users (username, password_hash) VALUES (?, ?)',
+                         (username, hash_password(password)))
             conn.commit()
         except:
             pass  # Already exists
@@ -2288,11 +2330,20 @@ def add_admin_user():
 
 @app.route('/admin/admins/delete/<int:admin_id>', methods=['POST'])
 def delete_admin_user(admin_id):
-    """Delete admin user"""
+    """Delete admin user - refuses to remove the last remaining admin so no
+    one can accidentally lock everyone out of the admin panel."""
     if not session.get('admin'):
         return redirect('/admin/login')
     
     conn = get_db()
+    admin_count = conn.execute(
+        "SELECT COUNT(*) as c FROM admin_users WHERE password_hash != ''"
+    ).fetchone()['c']
+
+    if admin_count <= 1:
+        conn.close()
+        return redirect('/admin/admins')
+
     conn.execute('DELETE FROM admin_users WHERE id = ?', (admin_id,))
     conn.commit()
     conn.close()
