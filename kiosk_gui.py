@@ -1741,13 +1741,19 @@ class KioskGUI:
             return
 
         icon, color, label = self.STOCK_MODE_LABELS[self.stock_mode]
-        property_note = self.prompt_property_note_generic(
-            "Which property is this for?"
-        )
-        if not property_note:
-            # Cancelled - stay on the scanning screen rather than losing the list
-            self.show_stock_scanning()
-            return
+
+        # Stock Parts In is just "this came back to the shelf" - no
+        # destination to record, so skip the property prompt entirely.
+        if self.stock_mode == 'stock_parts_in':
+            property_note = ''
+        else:
+            property_note = self.prompt_property_note_generic(
+                "Which property is this for?"
+            )
+            if not property_note:
+                # Cancelled - stay on the scanning screen rather than losing the list
+                self.show_stock_scanning()
+                return
 
         items_payload = [{'barcode': i['barcode'], 'quantity': i['quantity']} for i in self.stock_scanned_items]
 
@@ -1766,7 +1772,8 @@ class KioskGUI:
                  fg=color, bg='black').pack(pady=(50, 30))
         tk.Label(self.message_frame, text=f"{label} logged!",
                  font=self.header_font, fg=color, bg='black').pack(pady=(0, 10))
-        tk.Label(self.message_frame, text=f"{len(items_payload)} item(s) • {property_note}",
+        summary_text = f"{len(items_payload)} item(s)" + (f" • {property_note}" if property_note else "")
+        tk.Label(self.message_frame, text=summary_text,
                  font=self.body_font, fg='white', bg='black', wraplength=700, justify='center').pack()
 
         errors = result.get('errors') if isinstance(result, dict) else None

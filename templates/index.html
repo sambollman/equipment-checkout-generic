@@ -761,7 +761,7 @@ body {
             </div>
             <div class="status {% if entry.mode == 'stock_parts_out' %}checked-out{% else %}available{% endif %}">
                 <strong>{{ entry.first_name }} {{ entry.last_name }}</strong><br>
-                <small>📍 {{ entry.property_note }}</small><br>
+                {% if entry.property_note %}<small>📍 {{ entry.property_note }}</small><br>{% endif %}
                 <small>{{ entry.created_at }}</small>
             </div>
         </div>
@@ -877,12 +877,13 @@ body {
                     ? `✂️ ${entry.item_name}${qtyText}`
                     : `${entry.mode === 'stock_parts_out' ? '📤 OUT' : '📥 IN'} &mdash; ${entry.item_name}${qtyText}`;
                 const statusClass = (!isCutKeys && entry.mode === 'stock_parts_out') ? 'checked-out' : 'available';
+                const propertyLine = entry.property_note ? `<small>📍 ${entry.property_note}</small><br>` : '';
                 return `
                     <div class="key-card ${statusClass}" style="text-align:left;">
                         <div class="vehicle-name">${title}</div>
                         <div class="status ${statusClass}">
                             <strong>${entry.first_name} ${entry.last_name}</strong><br>
-                            <small>📍 ${entry.property_note}</small><br>
+                            ${propertyLine}
                             <small>${entry.created_at}</small>
                         </div>
                     </div>

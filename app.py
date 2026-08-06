@@ -1068,7 +1068,10 @@ def api_stock_movement():
         return {'error': 'Missing user_id, mode, or items'}, 400
     if mode not in VALID_STOCK_MODES:
         return {'error': f'mode must be one of {VALID_STOCK_MODES}'}, 400
-    if not property_note:
+    # Property/location only makes sense for items leaving the shop
+    # (stock_parts_out, cut_key). Stock Parts In is just "this came back to
+    # the shelf" - no destination to record.
+    if mode != 'stock_parts_in' and not property_note:
         return {'error': 'property_note is required'}, 400
 
     chicago_tz = pytz.timezone('America/Chicago')
@@ -1580,9 +1583,18 @@ def admin_dashboard():
     
     stock_parts_log, cut_keys_log = get_stock_logs()
     stock_conn = get_db()
-    stock_items = [dict(r) for r in stock_conn.execute(
-        'SELECT * FROM stock_items WHERE is_active = 1 ORDER BY item_type, name'
-    ).fetchall()]
+    # Show ALL items here (active + inactive) so admins can manage/reactivate -
+    # the kiosk-facing lookups elsewhere stay active-only.
+    stock_items_raw = stock_conn.execute(
+        'SELECT * FROM stock_items ORDER BY is_active DESC, item_type, name'
+    ).fetchall()
+    stock_items = []
+    for r in stock_items_raw:
+        item = dict(r)
+        item['has_movements'] = stock_conn.execute(
+            'SELECT COUNT(*) as c FROM stock_movements WHERE item_id = ?', (item['id'],)
+        ).fetchone()['c'] > 0
+        stock_items.append(item)
     stock_conn.close()
 
     return render_template('admin.html', users=users, fobs=fobs, history=history, 
@@ -1854,6 +1866,55 @@ def export_stock_items():
     response.headers['Content-Disposition'] = f'attachment; filename=stock-items-catalog-{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
 
     return response
+
+@app.route('/admin/stock-items/edit/<int:item_id>', methods=['POST'])
+def edit_stock_item(item_id):
+    """Edit a stock item's name, barcode, or active status (e.g. UPC changed)"""
+    if not session.get('admin'):
+        return redirect(url_for('admin_login'))
+
+    name = (request.form.get('name') or '').strip()
+    barcode = (request.form.get('barcode') or '').strip()
+    is_active = 1 if request.form.get('is_active') else 0
+
+    if not name or not barcode:
+        return redirect('/admin')
+
+    conn = get_db()
+    try:
+        conn.execute(
+            'UPDATE stock_items SET name = ?, barcode = ?, is_active = ? WHERE id = ?',
+            (name, barcode, is_active, item_id)
+        )
+        conn.commit()
+    except Exception:
+        pass  # Likely a duplicate barcode - silently ignore, admin can retry
+    conn.close()
+
+    return redirect('/admin')
+
+@app.route('/admin/stock-items/delete/<int:item_id>', methods=['POST'])
+def delete_stock_item(item_id):
+    """Permanently delete a stock item. Refuses if it has any movement
+    history, since that would orphan rows in the Stock Parts/Cut Keys log -
+    deactivate instead to preserve the audit trail."""
+    if not session.get('admin'):
+        return redirect(url_for('admin_login'))
+
+    conn = get_db()
+    movement_count = conn.execute(
+        'SELECT COUNT(*) as c FROM stock_movements WHERE item_id = ?', (item_id,)
+    ).fetchone()['c']
+
+    if movement_count > 0:
+        conn.close()
+        return redirect('/admin')
+
+    conn.execute('DELETE FROM stock_items WHERE id = ?', (item_id,))
+    conn.commit()
+    conn.close()
+
+    return redirect('/admin')
 
 @app.route('/admin/user/add', methods=['POST'])
 def add_user():
