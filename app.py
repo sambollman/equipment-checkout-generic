@@ -1867,31 +1867,101 @@ def export_stock_items():
 
     return response
 
-@app.route('/admin/stock-items/edit/<int:item_id>', methods=['POST'])
+@app.route('/admin/stock-items/qrcode/<int:item_id>')
+def generate_stock_item_qrcode(item_id):
+    """Generate a printable QR code for a stock item, encoding its barcode
+    value - scanning the printed label at the kiosk works exactly like
+    scanning the item's real UPC/barcode. Meant to be stuck on the shelf."""
+    if not session.get('admin'):
+        return redirect(url_for('admin_login'))
+
+    import qrcode
+    from io import BytesIO
+    from PIL import Image, ImageDraw, ImageFont
+
+    conn = get_db()
+    item = conn.execute('SELECT * FROM stock_items WHERE id = ?', (item_id,)).fetchone()
+    conn.close()
+
+    if not item:
+        return "Stock item not found", 404
+
+    qr = qrcode.QRCode(version=1, box_size=3, border=1)
+    qr.add_data(item['barcode'])
+    qr.make(fit=True)
+
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    qr_width, qr_height = qr_img.size
+
+    if qr_img.mode != 'RGB':
+        qr_img = qr_img.convert('RGB')
+
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 14)
+    except:
+        font = ImageFont.load_default()
+
+    text = item['name']
+    temp_img = Image.new('RGB', (1, 1))
+    temp_draw = ImageDraw.Draw(temp_img)
+    bbox = temp_draw.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+
+    text_height = 25
+    final_width = max(qr_width, text_width + 10)
+    final_img = Image.new('RGB', (final_width, qr_height + text_height), 'white')
+
+    qr_x = (final_width - qr_width) // 2
+    final_img.paste(qr_img, (qr_x, 0))
+
+    draw = ImageDraw.Draw(final_img)
+    text_x = (final_width - text_width) // 2
+    text_y = qr_height + 5
+    draw.text((text_x, text_y), text, fill='black', font=font)
+
+    buffer = BytesIO()
+    final_img.save(buffer, format='PNG')
+    buffer.seek(0)
+
+    return send_file(
+        buffer,
+        mimetype='image/png',
+        as_attachment=True,
+        download_name=f'{item["name"]}_qrcode.png'
+    )
+
+@app.route('/admin/stock-items/edit/<int:item_id>', methods=['GET', 'POST'])
 def edit_stock_item(item_id):
     """Edit a stock item's name, barcode, or active status (e.g. UPC changed)"""
     if not session.get('admin'):
         return redirect(url_for('admin_login'))
 
-    name = (request.form.get('name') or '').strip()
-    barcode = (request.form.get('barcode') or '').strip()
-    is_active = 1 if request.form.get('is_active') else 0
+    conn = get_db()
 
-    if not name or not barcode:
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        barcode = (request.form.get('barcode') or '').strip()
+        is_active = 1 if request.form.get('is_active') else 0
+
+        if name and barcode:
+            try:
+                conn.execute(
+                    'UPDATE stock_items SET name = ?, barcode = ?, is_active = ? WHERE id = ?',
+                    (name, barcode, is_active, item_id)
+                )
+                conn.commit()
+            except Exception:
+                pass  # Likely a duplicate barcode - form will just reload with old values
+        conn.close()
         return redirect('/admin')
 
-    conn = get_db()
-    try:
-        conn.execute(
-            'UPDATE stock_items SET name = ?, barcode = ?, is_active = ? WHERE id = ?',
-            (name, barcode, is_active, item_id)
-        )
-        conn.commit()
-    except Exception:
-        pass  # Likely a duplicate barcode - silently ignore, admin can retry
+    item = conn.execute('SELECT * FROM stock_items WHERE id = ?', (item_id,)).fetchone()
     conn.close()
 
-    return redirect('/admin')
+    if not item:
+        return "Stock item not found", 404
+
+    return render_template('edit_stock_item.html', item=item)
 
 @app.route('/admin/stock-items/delete/<int:item_id>', methods=['POST'])
 def delete_stock_item(item_id):

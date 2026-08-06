@@ -655,20 +655,21 @@
                 <th>Barcode</th>
                 <th>Type</th>
                 <th>On Hand Qty</th>
-                <th>Active</th>
+                <th>Status</th>
                 <th>Actions</th>
             </tr>
             {% for item in stock_items %}
-            <tr style="{% if not item.is_active %}opacity:0.5;{% endif %}">
-                <td><input type="text" name="name" form="stock-edit-{{ item.id }}" value="{{ item.name }}" style="width:150px; padding:4px;" required></td>
-                <td><input type="text" name="barcode" form="stock-edit-{{ item.id }}" value="{{ item.barcode }}" style="width:130px; padding:4px;" required></td>
+            <tr {% if not item.is_active %}class="inactive"{% endif %}>
+                <td>{{ item.name }}</td>
+                <td>{{ item.barcode }}</td>
                 <td>{{ 'Key Blank' if item.item_type == 'key_blank' else 'Stock Part' }}</td>
                 <td>{{ item.on_hand_qty }}</td>
-                <td style="text-align:center;"><input type="checkbox" name="is_active" form="stock-edit-{{ item.id }}" {% if item.is_active %}checked{% endif %}></td>
+                <td>{{ 'Active' if item.is_active else 'Inactive' }}</td>
                 <td>
-                    <button type="submit" form="stock-edit-{{ item.id }}" style="padding:4px 10px; margin-right:4px;">Save</button>
+                    <a href="/admin/stock-items/edit/{{ item.id }}" class="btn btn-success">Edit</a>
+                    <a href="/admin/stock-items/qrcode/{{ item.id }}" class="btn" style="background: #9C27B0; color: white;">QR Code</a>
                     {% if not item.has_movements %}
-                    <button type="submit" form="stock-delete-{{ item.id }}" style="padding:4px 10px; background:#f44336; color:white; border:none; border-radius:3px;" onclick="return confirm('Delete {{ item.name }} permanently? This cannot be undone.');">Delete</button>
+                    <button type="submit" form="stock-delete-{{ item.id }}" class="btn btn-danger" onclick="return confirm('Delete {{ item.name }} permanently? This cannot be undone.');">Delete</button>
                     {% else %}
                     <span style="font-size:0.8em; opacity:0.7;" title="Has movement history - deactivate instead of deleting to preserve the log">Has history</span>
                     {% endif %}
@@ -680,12 +681,11 @@
         </table>
     </div>
     {% for item in stock_items %}
-    <form id="stock-edit-{{ item.id }}" method="POST" action="/admin/stock-items/edit/{{ item.id }}"></form>
     {% if not item.has_movements %}
     <form id="stock-delete-{{ item.id }}" method="POST" action="/admin/stock-items/delete/{{ item.id }}"></form>
     {% endif %}
     {% endfor %}
-    <p style="opacity:0.7; font-size:0.9em; margin-top:10px;">Uncheck "Active" and Save to hide an item from the kiosk without losing its history (e.g. discontinued product). Delete is only available for items with no recorded activity yet - if a UPC changed, just edit the Barcode field and Save instead.</p>
+    <p style="opacity:0.7; font-size:0.9em; margin-top:10px;">Edit lets you fix a changed UPC or rename an item. Deactivate it (via Edit) to hide it from the kiosk without losing its history - Delete is only available for items with no recorded activity yet. QR Code prints a scannable label you can stick on the shelf.</p>
 </div>
 
 <!-- Active Reservations Tab Content -->

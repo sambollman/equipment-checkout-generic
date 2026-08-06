@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Stock Item</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f0f0f0; }
+        .form-container { background: white; padding: 30px; border-radius: 8px; max-width: 500px; margin: 0 auto; }
+        h1 { color: #333; }
+        label { display: block; margin-top: 15px; font-weight: bold; }
+        input[type="text"] { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .checkbox-row { display: flex; align-items: center; margin-top: 15px; }
+        .checkbox-row input { width: auto; margin-right: 8px; }
+        .checkbox-row label { margin-top: 0; font-weight: normal; }
+        button { margin-top: 20px; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .save-btn { background-color: #4CAF50; color: white; }
+        .cancel-btn { background-color: #666; color: white; margin-left: 10px; }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <h1>Edit Stock Item</h1>
+        <form method="POST">
+            <label>Name:</label>
+            <input type="text" name="name" value="{{ item.name }}" required>
+
+            <label>Barcode / UPC:</label>
+            <input type="text" name="barcode" value="{{ item.barcode }}" required>
+
+            <div class="checkbox-row">
+                <input type="checkbox" name="is_active" id="is_active" {% if item.is_active %}checked{% endif %}>
+                <label for="is_active">Active (visible/scannable at the kiosk)</label>
+            </div>
+
+            <button type="submit" class="save-btn">Save Changes</button>
+            <a href="/admin"><button type="button" class="cancel-btn">Cancel</button></a>
+        </form>
+    </div>
+</body>
+</html>
