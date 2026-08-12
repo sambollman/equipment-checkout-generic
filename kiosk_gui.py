@@ -1009,7 +1009,7 @@ class KioskGUI:
         button_frame1 = tk.Frame(self.message_frame, bg='black')
         button_frame1.pack(pady=10)
     
-        # Bulk Checkout button (new!)
+        # Bulk Checkout button
         bulk_btn = tk.Button(
             button_frame1,
             text="🛒 Bulk Checkout",
@@ -1022,7 +1022,6 @@ class KioskGUI:
         )
         bulk_btn.pack(side='left', padx=10)
 
-    
         # Button container - Second row
         button_frame2 = tk.Frame(self.message_frame, bg='black')
         button_frame2.pack(pady=10)
@@ -1039,40 +1038,10 @@ class KioskGUI:
             command=self.add_note
         )
         note_btn.pack(side='left', padx=10)
-    
-        # Replace Fob button
-        fob_btn = tk.Button(
-            button_frame2,
-            text="🔑 Replace Fob",
-            font=font.Font(size=16, weight='bold'),
-            bg='#FF9800',
-            fg='white',
-            width=15,
-            height=2,
-            command=self.replace_fob
-        )
-        fob_btn.pack(side='left', padx=10)
-    
-        # Replace Card button
-        card_btn = tk.Button(
-            button_frame2,
-            text="💳 Replace Card",
-            font=font.Font(size=16, weight='bold'),
-            bg='#9C27B0',
-            fg='white',
-            width=15,
-            height=2,
-            command=self.replace_card
-        )
-        card_btn.pack(side='left', padx=10)
-
-        # Button container - Third row
-        button_frame3 = tk.Frame(self.message_frame, bg='black')
-        button_frame3.pack(pady=10)
 
         # Add New button
         add_new_btn = tk.Button(
-            button_frame3,
+            button_frame2,
             text="➕ Add New",
             font=font.Font(size=16, weight='bold'),
             bg='#009688',
@@ -1083,12 +1052,12 @@ class KioskGUI:
         )
         add_new_btn.pack(side='left', padx=10)
 
-        # Button container - Fourth row (log-only modes: Stock Parts / Cut Keys)
-        button_frame4 = tk.Frame(self.message_frame, bg='black')
-        button_frame4.pack(pady=10)
+        # Button container - Third row (log-only modes: Stock Parts / Cut Keys)
+        button_frame3 = tk.Frame(self.message_frame, bg='black')
+        button_frame3.pack(pady=10)
 
         stock_out_btn = tk.Button(
-            button_frame4,
+            button_frame3,
             text="📤 Stock Parts Out",
             font=font.Font(size=16, weight='bold'),
             bg='#795548',
@@ -1100,7 +1069,7 @@ class KioskGUI:
         stock_out_btn.pack(side='left', padx=10)
 
         stock_in_btn = tk.Button(
-            button_frame4,
+            button_frame3,
             text="📥 Stock Parts In",
             font=font.Font(size=16, weight='bold'),
             bg='#8D6E63',
@@ -1112,7 +1081,7 @@ class KioskGUI:
         stock_in_btn.pack(side='left', padx=10)
 
         cut_key_btn = tk.Button(
-            button_frame4,
+            button_frame3,
             text="✂️ Cut Key",
             font=font.Font(size=16, weight='bold'),
             bg='#607D8B',
@@ -1122,6 +1091,36 @@ class KioskGUI:
             command=lambda: self.start_stock_mode('cut_key')
         )
         cut_key_btn.pack(side='left', padx=10)
+
+        # Button container - Fourth row (replace lost/broken fobs and cards)
+        button_frame4 = tk.Frame(self.message_frame, bg='black')
+        button_frame4.pack(pady=10)
+
+        # Replace Equipment Fob button
+        fob_btn = tk.Button(
+            button_frame4,
+            text="🔑 Replace Equipment Fob",
+            font=font.Font(size=16, weight='bold'),
+            bg='#FF9800',
+            fg='white',
+            width=20,
+            height=2,
+            command=self.replace_fob
+        )
+        fob_btn.pack(side='left', padx=10)
+
+        # Replace Employee Fob button
+        card_btn = tk.Button(
+            button_frame4,
+            text="💳 Replace Employee Fob",
+            font=font.Font(size=16, weight='bold'),
+            bg='#9C27B0',
+            fg='white',
+            width=20,
+            height=2,
+            command=self.replace_card
+        )
+        card_btn.pack(side='left', padx=10)
 
         # Instructions
         self.entry.focus_set()
@@ -1973,6 +1972,24 @@ class KioskGUI:
         # Return to welcome after 3 seconds
         self.root.after(3000, self.show_welcome)
     
+    def show_scan_error(self, message, icon="❓", color="#666"):
+        """Show a scan error WITHOUT ending a Bulk Checkout or Stock Parts/
+        Cut Keys session - returns to whichever screen the person was on
+        (with their scanned items and user still intact) instead of
+        resetting all the way back to the welcome screen."""
+        self.clear_message_frame()
+        tk.Label(self.message_frame, text=icon, font=font.Font(size=100),
+                 fg=color, bg='black').pack(pady=(50, 20))
+        tk.Label(self.message_frame, text=message, font=self.body_font,
+                 fg=color, bg='black', wraplength=800, justify='center').pack()
+        self.instructions_label.config(text="")
+        if self.bulk_checkout_mode:
+            self.root.after(2500, self.show_bulk_scanning)
+        elif self.stock_mode:
+            self.root.after(2500, self.show_stock_scanning)
+        else:
+            self.root.after(3000, self.show_welcome)
+
     def on_key_press(self, event):
         """Handle keyboard input"""
         # Handle F11 and Escape for fullscreen
@@ -1991,6 +2008,12 @@ class KioskGUI:
             
             if scan_data:
                 self.process_scan(scan_data)
+            elif self.bulk_checkout_mode:
+                # Plain Enter with nothing scanned = same as clicking "Done"
+                self.complete_bulk_checkout()
+            elif self.stock_mode:
+                # Plain Enter with nothing scanned = same as clicking "Done"
+                self.complete_stock_session()
         elif event.char.isprintable():
             # Add to buffer
             self.scan_buffer += event.char
@@ -2064,17 +2087,12 @@ class KioskGUI:
             else:
                 self.handle_fob_scan(scan_data)
         else:
-            # Unknown scan outside of add new mode - show error
-            self.clear_message_frame()
-            tk.Label(self.message_frame, text="❓", font=font.Font(size=120),
-                  fg='#666', bg='black').pack(pady=(50, 30))
-            tk.Label(self.message_frame, text="Not Recognized",
-                  font=self.header_font, fg='#666', bg='black').pack(pady=(0, 20))
-            tk.Label(self.message_frame, text="Use the 'Add New' button to register a new user or item",
-                  font=self.body_font, fg='white', bg='black',
-                  wraplength=800, justify='center').pack()
-            self.instructions_label.config(text="")
-            self.root.after(3000, self.show_welcome)
+            # Unknown scan outside of add new mode - show error, but don't
+            # nuke an in-progress Bulk Checkout / Stock Parts session
+            self.show_scan_error(
+                "Not Recognized\n\nUse the 'Add New' button to register a new user or item",
+                icon="❓", color="#666"
+            )
 
     
     def handle_card_scan(self, card_id):
@@ -2384,12 +2402,10 @@ class KioskGUI:
             if found and fob:
                 self.add_bulk_item(fob)
             else:
-                self.show_error("Unknown fob")
-            return
-            if fob:
-                self.add_bulk_item(dict(fob))
-            else:
-                self.show_error("Unknown fob")
+                self.show_scan_error(
+                    "Item not recognized.\nUse the ➕ Add New button to register new equipment.",
+                    icon="⚠️", color="#FF9800"
+                )
             return
 
         

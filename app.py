@@ -224,15 +224,28 @@ def index():
         """Sort key that handles numbers naturally"""
         return [int(text) if text.isdigit() else text.lower() 
                 for text in re.split('([0-9]+)', item['vehicle_name'])]
+
+    def checkout_first_key(item):
+        """Same natural sort, but checked-out items rise to the top first"""
+        return (0 if item.get('checkout_id') else 1, natural_sort_key(item))
     
     # Group by category with natural sorting
     discontinued = sorted([k for k in formatted_keys if k['category'] == 'Discontinued'], key=natural_sort_key)
-    rentables = sorted([k for k in formatted_keys if k['category'] == 'Rentables'], key=natural_sort_key)
-    tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], key=natural_sort_key)
+    rentables = sorted([k for k in formatted_keys if k['category'] == 'Rentables'], key=checkout_first_key)
+    tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], key=checkout_first_key)
     cleaning = sorted([k for k in formatted_keys if k['category'] == 'Cleaning'], key=natural_sort_key)
     vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'], key=natural_sort_key)
     keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=natural_sort_key)
     lock_box = sorted([k for k in formatted_keys if k['category'] == 'Lock Box'], key=natural_sort_key)
+
+    # "All" tab - everything except Stock Parts, Discontinued, Cut Keys
+    # (those two aren't even fob-based categories; Discontinued excluded
+    # intentionally). Checked-out items rise to the top here too.
+    all_items = sorted(
+        [k for k in formatted_keys if k['category'] in
+         ('Keys', 'Rentables', 'Tools', 'Vehicles', 'Lock Box', 'Cleaning')],
+        key=checkout_first_key
+    )
 
     stock_parts_log, cut_keys_log = get_stock_logs()
 
@@ -244,6 +257,7 @@ def index():
                       vehicles=vehicles,
                       keys=keys,
                       lock_box=lock_box,
+                      all_items=all_items,
                       stock_parts_log=stock_parts_log,
                       cut_keys_log=cut_keys_log)
 def get_current_status():
@@ -371,14 +385,23 @@ def get_current_status():
     def natural_sort_key(item):
         return [int(text) if text.isdigit() else text.lower() 
                 for text in re.split('([0-9]+)', item['vehicle_name'])]
+
+    def checkout_first_key(item):
+        return (0 if item.get('checkout_id') else 1, natural_sort_key(item))
     
     discontinued = sorted([k for k in formatted_keys if k['category'] == 'Discontinued'], key=natural_sort_key)
-    rentables = sorted([k for k in formatted_keys if k['category'] == 'Rentables'], key=natural_sort_key)
-    tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], key=natural_sort_key)
+    rentables = sorted([k for k in formatted_keys if k['category'] == 'Rentables'], key=checkout_first_key)
+    tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], key=checkout_first_key)
     cleaning = sorted([k for k in formatted_keys if k['category'] == 'Cleaning'], key=natural_sort_key)
     vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'], key=natural_sort_key)
     keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=natural_sort_key)
     lock_box = sorted([k for k in formatted_keys if k['category'] == 'Lock Box'], key=natural_sort_key)
+
+    all_items = sorted(
+        [k for k in formatted_keys if k['category'] in
+         ('Keys', 'Rentables', 'Tools', 'Vehicles', 'Lock Box', 'Cleaning')],
+        key=checkout_first_key
+    )
 
     stock_parts_log, cut_keys_log = get_stock_logs()
 
@@ -390,6 +413,7 @@ def get_current_status():
         'vehicles': vehicles,
         'keys': keys,
         'lock_box': lock_box,
+        'all_items': all_items,
         'stock_parts_log': stock_parts_log,
         'cut_keys_log': cut_keys_log,
         'active_reservations': formatted_reservations

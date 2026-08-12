@@ -394,10 +394,63 @@ body {
         <button class="tab" data-category="Cleaning">🧹 Cleaning</button>
         <button class="tab" data-category="Stock Parts">📤 Stock Parts</button>
         <button class="tab" data-category="Cut Keys">✂️ Cut Keys</button>
+        <button class="tab" data-category="All">📋 All</button>
         <button class="tab" data-category="Discontinued">🚫 Discontinued</button>
     </div>
 
-    <div class="tab-content active" id="Keys-content">
+    <div class="tab-content" id="All-content">
+    <div class="grid">
+        {% for key in all_items %}
+        <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
+            <div style="font-size:0.75em; opacity:0.65; text-transform:uppercase; letter-spacing:0.5px;">{{ key.category }}</div>
+            <div class="vehicle-name">{{ key.vehicle_name }}</div>
+            {% if key.checkout_id %}
+                <div class="status checked-out">
+                    <strong>Checked out to:</strong><br>
+                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
+                    <small>Since {{ key.checked_out_at }}</small>
+                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}
+                </div>
+            {% elif key.is_available == 0 %}
+                <div class="status unavailable">
+                    🚫 Unavailable
+                </div>
+            {% else %}
+                <div class="status available">
+                    ✓ Available
+                </div>
+            {% endif %}
+            {% if key.reservation %}
+                <div style="background: #FFA500; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                    📅 Reserved<br>
+                    <small>
+                        {% if key.reservation.first_name %}
+                            For: {{ key.reservation.first_name }} {{ key.reservation.last_name }}<br>
+                        {% elif key.reservation.reserved_for_name %}
+                            For: {{ key.reservation.reserved_for_name }}<br>
+                        {% endif %}
+                        Time: {{ key.reservation.reserved_datetime }}<br>
+                        {% if key.reservation.reason %}{{ key.reservation.reason }}{% endif %}
+                    </small>
+                </div>
+            {% endif %}
+            {% if key.note %}
+                {% if key.note.note_text.startswith('UNAVAILABLE:') %}
+                    <div style="background: #9E9E9E; color: white; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        🚫 {{ key.note.note_text[12:].strip() }}
+                    </div>
+                {% else %}
+                    <div style="background: #FF9800; color: black; padding: 5px; margin-top: 5px; border-radius: 3px; font-size: 0.85em;">
+                        ⚠️ Note: {{ key.note.note_text }}
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="tab-content active" id="Keys-content">
     <div class="grid">
         {% for key in keys %}
         <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
@@ -846,6 +899,7 @@ body {
         // Fetch and update display
         function updateDisplay(data) {
             // Update each category tab
+            updateSection('All', data.all_items, true);
             updateSection('Keys', data.keys);
             updateSection('Rentables', data.rentables);
             updateSection('Tools', data.tools);
@@ -891,7 +945,7 @@ body {
             }).join('');
         }
         
-        function updateSection(category, items) {
+        function updateSection(category, items, showCategoryBadge) {
             if (!items) return; // Skip if no data
             
             const contentDiv = document.getElementById(`${category}-content`);
@@ -903,6 +957,7 @@ body {
             // Update the grid with new cards
             gridDiv.innerHTML = items.map(key => `
                 <div class="key-card ${key.checkout_id ? 'checked-out' : 'available'}">
+                    ${showCategoryBadge ? `<div style="font-size:0.75em; opacity:0.65; text-transform:uppercase; letter-spacing:0.5px;">${key.category}</div>` : ''}
                     <div class="vehicle-name">${key.vehicle_name}</div>
                     ${key.checkout_id ? `
                         <div class="status checked-out">
