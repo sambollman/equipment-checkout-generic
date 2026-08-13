@@ -1260,7 +1260,7 @@ class KioskGUI:
         )
         cancel_btn.pack(side='left', padx=10)
         
-        self.instructions_label.config(text=f"{len(self.bulk_items)} item(s) scanned • Timeout in 60 seconds")
+        self.instructions_label.config(text=f"{len(self.bulk_items)} item(s) scanned • Timeout in 3 minutes")
 
     def add_bulk_item(self, fob):
         """Add item to bulk checkout list"""
@@ -1661,7 +1661,7 @@ class KioskGUI:
         )
         cancel_btn.pack(side='left', padx=10)
 
-        self.instructions_label.config(text=f"{len(self.stock_scanned_items)} item(s) scanned • Timeout in 60 seconds")
+        self.instructions_label.config(text=f"{len(self.stock_scanned_items)} item(s) scanned • Timeout in 3 minutes")
 
     def handle_stock_scan(self, scan_data):
         """Route a scan while in Stock Parts / Cut Key mode"""
