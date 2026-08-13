@@ -692,7 +692,7 @@ class KioskGUI:
             )
             instruction_label.pack()
             
-            self.instructions_label.config(text="Session will timeout after 60 seconds")
+            self.instructions_label.config(text="Session will timeout after 3 minutes")
             self.last_scan_time = datetime.now()
         else:
             # Multiple matches - let them choose
@@ -761,7 +761,7 @@ class KioskGUI:
                 )
                 instruction_label.pack()
                 
-                self.instructions_label.config(text="Session will timeout after 60 seconds")
+                self.instructions_label.config(text="Session will timeout after 3 minutes")
                 self.last_scan_time = datetime.now()
             else:
                 self.show_welcome()
@@ -818,7 +818,7 @@ class KioskGUI:
             )
             instruction_label.pack()
             
-            self.instructions_label.config(text="Session will timeout after 60 seconds")
+            self.instructions_label.config(text="Session will timeout after 3 minutes")
             self.last_scan_time = datetime.now()
         else:
             # Multiple matches - let them choose
@@ -887,7 +887,7 @@ class KioskGUI:
                 )
                 instruction_label.pack()
                 
-                self.instructions_label.config(text="Session will timeout after 60 seconds")
+                self.instructions_label.config(text="Session will timeout after 3 minutes")
                 self.last_scan_time = datetime.now()
             else:
                 self.show_welcome()
@@ -1256,7 +1256,7 @@ class KioskGUI:
         )
         cancel_btn.pack(side='left', padx=10)
         
-        self.instructions_label.config(text=f"{len(self.bulk_items)} item(s) scanned • Timeout in 60 seconds")
+        self.instructions_label.config(text=f"{len(self.bulk_items)} item(s) scanned • Timeout in 3 minutes")
 
     def add_bulk_item(self, fob):
         """Add item to bulk checkout list"""
@@ -1657,7 +1657,7 @@ class KioskGUI:
         )
         cancel_btn.pack(side='left', padx=10)
 
-        self.instructions_label.config(text=f"{len(self.stock_scanned_items)} item(s) scanned • Timeout in 60 seconds")
+        self.instructions_label.config(text=f"{len(self.stock_scanned_items)} item(s) scanned • Timeout in 3 minutes")
 
     def handle_stock_scan(self, scan_data):
         """Route a scan while in Stock Parts / Cut Key mode"""
@@ -1836,7 +1836,7 @@ class KioskGUI:
         )
         cancel_btn.pack(pady=20)
 
-        self.instructions_label.config(text="Session will timeout after 60 seconds")
+        self.instructions_label.config(text="Session will timeout after 3 minutes")
         self.last_scan_time = datetime.now()
 
     def show_user_greeting(self, user):
@@ -1864,7 +1864,7 @@ class KioskGUI:
         instruction_label.pack()
         
         self.instructions_label.config(
-            text="Session will timeout after 60 seconds of inactivity"
+            text="Session will timeout after 3 minutes of inactivity"
         )
     
     def show_checkout_success(self, vehicle_name, category='Vehicle'):
@@ -2739,7 +2739,7 @@ class KioskGUI:
                 )
                 instruction_label.pack()
                 
-                self.instructions_label.config(text="Session will timeout after 60 seconds")
+                self.instructions_label.config(text="Session will timeout after 3 minutes")
                 
                 # Store this fob for later checkout
                 self.pending_fob = fob
