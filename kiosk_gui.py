@@ -20,6 +20,10 @@ class KioskGUI:
         self.kiosk_id = kiosk_id
         self.current_user = None
         self.scan_timeout = 60
+        # Bulk Checkout and Stock Parts / Cut Keys involve scanning several
+        # items in a row - give those sessions more breathing room before
+        # timing out than a normal single-item scan.
+        self.extended_scan_timeout = 180
         self.last_scan_time = None
         self.pending_fob = None
         self.replace_mode = None # 'card' or 'fob'
@@ -604,7 +608,7 @@ class KioskGUI:
 
     # Categories where an item physically leaves and gets left at a property -
     # we require a free-text note of which property it's going to.
-    PROPERTY_NOTE_CATEGORIES = ('Rentables', 'Lock Box')
+    PROPERTY_NOTE_CATEGORIES = ('Rentables', 'Lock Box', 'Signs')
 
     def prompt_property_note(self, item_label):
         """Show a REQUIRED text prompt for which property an item is going to.
@@ -1665,7 +1669,8 @@ class KioskGUI:
             # First scan must be the employee's keycard
             found, user = self.lookup_api('user', scan_data)
             if not found or not user:
-                self.show_error("Unknown card. Please register at the admin panel.")
+                self.show_scan_error("Unknown card. Please register at the admin panel.",
+                                      icon="⚠️", color="#FF9800")
                 return
             self.current_user = user
             self.show_stock_scanning()
@@ -1686,7 +1691,8 @@ class KioskGUI:
         # something OUT (stock_parts_out / cut_key). You can't return an item
         # to stock that was never catalogued.
         if self.stock_mode == 'stock_parts_in':
-            self.show_error("Item not recognized. It must already be in the system to log it back in.")
+            self.show_scan_error("Item not recognized. It must already be in the system to log it back in.",
+                                  icon="⚠️", color="#FF9800")
             return
 
         item_type = 'key_blank' if self.stock_mode == 'cut_key' else 'stock_part'
@@ -1695,14 +1701,13 @@ class KioskGUI:
         self.last_scan_time = datetime.now()
 
         if not name or not name.strip():
-            self.show_error("Registration cancelled")
-            self.root.after(1500, self.show_stock_scanning)
+            # Cancelled - stay in the current stock session, don't wreck it
+            self.show_scan_error("Registration cancelled", icon="⚠️", color="#FF9800")
             return
 
         success, result = self.stock_register_api(scan_data, name.strip(), item_type)
         if not success:
-            self.show_error(f"Could not register item: {result}")
-            self.root.after(2000, self.show_stock_scanning)
+            self.show_scan_error(f"Could not register item: {result}", icon="⚠️", color="#FF9800")
             return
 
         self.add_stock_scanned_item(result['barcode'], result['name'])
@@ -2442,7 +2447,7 @@ class KioskGUI:
             
             # Dropdown for category
             category_var = tk.StringVar(value="Keys")
-            categories = ["Discontinued", "Rentables", "Tools", "Cleaning", "Vehicles", "Keys", "Lock Box"]
+            categories = ["Discontinued", "Rentables", "Tools", "Cleaning", "Vehicles", "Keys", "Lock Box", "Signs"]
             
             dropdown = ttk.Combobox(dialog, textvariable=category_var, values=categories, 
                                    font=font.Font(size=16), state='readonly', width=20)
@@ -2752,7 +2757,8 @@ class KioskGUI:
         """Check for session timeout"""
         if (self.current_user or self.replace_mode or self.note_mode or self.pending_fob or self.stock_mode) and self.last_scan_time:
             elapsed = (datetime.now() - self.last_scan_time).total_seconds()
-            if elapsed > self.scan_timeout:
+            timeout_limit = self.extended_scan_timeout if (self.bulk_checkout_mode or self.stock_mode) else self.scan_timeout
+            if elapsed > timeout_limit:
                 self.show_error("Session timeout")
                 self.current_user = None
                 self.pending_fob = None

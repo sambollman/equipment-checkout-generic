@@ -16,7 +16,7 @@ migrate_db()
 # Categories that require a free-text "which property is this for" note at
 # checkout time. Rentables + Lock Box both get physically carried to and left
 # at a property, so we capture where they went.
-PROPERTY_NOTE_REQUIRED_CATEGORIES = ('Rentables', 'Lock Box')
+PROPERTY_NOTE_REQUIRED_CATEGORIES = ('Rentables', 'Lock Box', 'Signs')
 
 # Kiosk authentication (HTTP Basic Auth)
 KIOSK_USER = os.getenv('KIOSK_USER', 'kiosk')
@@ -237,13 +237,14 @@ def index():
     vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'], key=natural_sort_key)
     keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=natural_sort_key)
     lock_box = sorted([k for k in formatted_keys if k['category'] == 'Lock Box'], key=natural_sort_key)
+    signs = sorted([k for k in formatted_keys if k['category'] == 'Signs'], key=natural_sort_key)
 
     # "All" tab - everything except Stock Parts, Discontinued, Cut Keys
     # (those two aren't even fob-based categories; Discontinued excluded
     # intentionally). Checked-out items rise to the top here too.
     all_items = sorted(
         [k for k in formatted_keys if k['category'] in
-         ('Keys', 'Rentables', 'Tools', 'Vehicles', 'Lock Box', 'Cleaning')],
+         ('Keys', 'Rentables', 'Tools', 'Vehicles', 'Lock Box', 'Cleaning', 'Signs')],
         key=checkout_first_key
     )
 
@@ -257,6 +258,7 @@ def index():
                       vehicles=vehicles,
                       keys=keys,
                       lock_box=lock_box,
+                      signs=signs,
                       all_items=all_items,
                       stock_parts_log=stock_parts_log,
                       cut_keys_log=cut_keys_log)
@@ -396,10 +398,11 @@ def get_current_status():
     vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'], key=natural_sort_key)
     keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=natural_sort_key)
     lock_box = sorted([k for k in formatted_keys if k['category'] == 'Lock Box'], key=natural_sort_key)
+    signs = sorted([k for k in formatted_keys if k['category'] == 'Signs'], key=natural_sort_key)
 
     all_items = sorted(
         [k for k in formatted_keys if k['category'] in
-         ('Keys', 'Rentables', 'Tools', 'Vehicles', 'Lock Box', 'Cleaning')],
+         ('Keys', 'Rentables', 'Tools', 'Vehicles', 'Lock Box', 'Cleaning', 'Signs')],
         key=checkout_first_key
     )
 
@@ -413,6 +416,7 @@ def get_current_status():
         'vehicles': vehicles,
         'keys': keys,
         'lock_box': lock_box,
+        'signs': signs,
         'all_items': all_items,
         'stock_parts_log': stock_parts_log,
         'cut_keys_log': cut_keys_log,
