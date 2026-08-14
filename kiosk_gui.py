@@ -696,7 +696,7 @@ class KioskGUI:
             )
             instruction_label.pack()
             
-            self.instructions_label.config(text="Session will timeout after 3 minutes")
+            self.instructions_label.config(text="Session will timeout after 60 seconds")
             self.last_scan_time = datetime.now()
         else:
             # Multiple matches - let them choose
@@ -765,7 +765,7 @@ class KioskGUI:
                 )
                 instruction_label.pack()
                 
-                self.instructions_label.config(text="Session will timeout after 3 minutes")
+                self.instructions_label.config(text="Session will timeout after 60 seconds")
                 self.last_scan_time = datetime.now()
             else:
                 self.show_welcome()
@@ -822,7 +822,7 @@ class KioskGUI:
             )
             instruction_label.pack()
             
-            self.instructions_label.config(text="Session will timeout after 3 minutes")
+            self.instructions_label.config(text="Session will timeout after 60 seconds")
             self.last_scan_time = datetime.now()
         else:
             # Multiple matches - let them choose
@@ -891,7 +891,7 @@ class KioskGUI:
                 )
                 instruction_label.pack()
                 
-                self.instructions_label.config(text="Session will timeout after 3 minutes")
+                self.instructions_label.config(text="Session will timeout after 60 seconds")
                 self.last_scan_time = datetime.now()
             else:
                 self.show_welcome()
@@ -1841,7 +1841,7 @@ class KioskGUI:
         )
         cancel_btn.pack(pady=20)
 
-        self.instructions_label.config(text="Session will timeout after 3 minutes")
+        self.instructions_label.config(text="Session will timeout after 60 seconds")
         self.last_scan_time = datetime.now()
 
     def show_user_greeting(self, user):
@@ -1869,7 +1869,7 @@ class KioskGUI:
         instruction_label.pack()
         
         self.instructions_label.config(
-            text="Session will timeout after 3 minutes of inactivity"
+            text="Session will timeout after 60 seconds of inactivity"
         )
     
     def show_checkout_success(self, vehicle_name, category='Vehicle'):
@@ -2744,7 +2744,7 @@ class KioskGUI:
                 )
                 instruction_label.pack()
                 
-                self.instructions_label.config(text="Session will timeout after 3 minutes")
+                self.instructions_label.config(text="Session will timeout after 60 seconds")
                 
                 # Store this fob for later checkout
                 self.pending_fob = fob
