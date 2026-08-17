@@ -615,7 +615,44 @@
 
 <!-- Stock Parts Log Tab Content -->
 <div class="tab-content" id="Stock Parts Log-content">
-    <a href="/admin/export/stock-log?mode=stock_parts" style="display:inline-block; margin-bottom:10px; padding:8px 16px; background:#795548; color:white; text-decoration:none; border-radius:4px;">⬇️ Export CSV</a>
+    <div class="filter-form" style="padding: 15px; margin-bottom: 15px; border-radius: 5px;">
+        <form method="GET" action="/admin#Stock Parts Log" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: end;">
+            <div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Start Date:</label>
+                <input type="date" name="sp_start_date" value="{{ request.args.get('sp_start_date', '') }}"
+                       style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">End Date:</label>
+                <input type="date" name="sp_end_date" value="{{ request.args.get('sp_end_date', '') }}"
+                       style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Item:</label>
+                <select name="sp_item_id" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="">All Items</option>
+                    {% for item in stock_items if item.item_type == 'stock_part' %}
+                    <option value="{{ item.id }}" {% if request.args.get('sp_item_id') == item.id|string %}selected{% endif %}>{{ item.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Employee:</label>
+                <select name="sp_user_id" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="">All Employees</option>
+                    {% for user in users %}
+                    <option value="{{ user.id }}" {% if request.args.get('sp_user_id') == user.id|string %}selected{% endif %}>{{ user.last_name }}, {{ user.first_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <button type="submit" class="btn" style="background:#795548; color:white; padding: 9px 16px; border:none; cursor:pointer;">Filter</button>
+                <a href="/admin#Stock Parts Log" class="btn" style="background:#999; color:white; padding: 9px 16px; text-decoration:none;">Clear</a>
+            </div>
+        </form>
+    </div>
+    <a href="/admin/export/stock-log?mode=stock_parts{% if request.args.get('sp_start_date') %}&start_date={{ request.args.get('sp_start_date') }}{% endif %}{% if request.args.get('sp_end_date') %}&end_date={{ request.args.get('sp_end_date') }}{% endif %}{% if request.args.get('sp_item_id') %}&item_id={{ request.args.get('sp_item_id') }}{% endif %}{% if request.args.get('sp_user_id') %}&user_id={{ request.args.get('sp_user_id') }}{% endif %}"
+       style="display:inline-block; margin-bottom:10px; padding:8px 16px; background:#795548; color:white; text-decoration:none; border-radius:4px;">⬇️ Export CSV</a>
     <div style="overflow-x: auto;">
         <table>
             <tr>
@@ -636,7 +673,7 @@
                 <td>{{ entry.created_at }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="6">No stock parts activity logged yet.</td></tr>
+            <tr><td colspan="6">No stock parts activity matches these filters.</td></tr>
             {% endfor %}
         </table>
     </div>
@@ -644,7 +681,44 @@
 
 <!-- Cut Keys Log Tab Content -->
 <div class="tab-content" id="Cut Keys Log-content">
-    <a href="/admin/export/stock-log?mode=cut_key" style="display:inline-block; margin-bottom:10px; padding:8px 16px; background:#607D8B; color:white; text-decoration:none; border-radius:4px;">⬇️ Export CSV</a>
+    <div class="filter-form" style="padding: 15px; margin-bottom: 15px; border-radius: 5px;">
+        <form method="GET" action="/admin#Cut Keys Log" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: end;">
+            <div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Start Date:</label>
+                <input type="date" name="ck_start_date" value="{{ request.args.get('ck_start_date', '') }}"
+                       style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">End Date:</label>
+                <input type="date" name="ck_end_date" value="{{ request.args.get('ck_end_date', '') }}"
+                       style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Key Blank:</label>
+                <select name="ck_item_id" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="">All Key Blanks</option>
+                    {% for item in stock_items if item.item_type == 'key_blank' %}
+                    <option value="{{ item.id }}" {% if request.args.get('ck_item_id') == item.id|string %}selected{% endif %}>{{ item.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Employee:</label>
+                <select name="ck_user_id" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="">All Employees</option>
+                    {% for user in users %}
+                    <option value="{{ user.id }}" {% if request.args.get('ck_user_id') == user.id|string %}selected{% endif %}>{{ user.last_name }}, {{ user.first_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <button type="submit" class="btn" style="background:#607D8B; color:white; padding: 9px 16px; border:none; cursor:pointer;">Filter</button>
+                <a href="/admin#Cut Keys Log" class="btn" style="background:#999; color:white; padding: 9px 16px; text-decoration:none;">Clear</a>
+            </div>
+        </form>
+    </div>
+    <a href="/admin/export/stock-log?mode=cut_key{% if request.args.get('ck_start_date') %}&start_date={{ request.args.get('ck_start_date') }}{% endif %}{% if request.args.get('ck_end_date') %}&end_date={{ request.args.get('ck_end_date') }}{% endif %}{% if request.args.get('ck_item_id') %}&item_id={{ request.args.get('ck_item_id') }}{% endif %}{% if request.args.get('ck_user_id') %}&user_id={{ request.args.get('ck_user_id') }}{% endif %}"
+       style="display:inline-block; margin-bottom:10px; padding:8px 16px; background:#607D8B; color:white; text-decoration:none; border-radius:4px;">⬇️ Export CSV</a>
     <div style="overflow-x: auto;">
         <table>
             <tr>
@@ -663,7 +737,7 @@
                 <td>{{ entry.created_at }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="5">No key cutting activity logged yet.</td></tr>
+            <tr><td colspan="5">No key cutting activity matches these filters.</td></tr>
             {% endfor %}
         </table>
     </div>

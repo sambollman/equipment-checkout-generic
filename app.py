@@ -424,21 +424,44 @@ def get_current_status():
     }
 
 
-def get_stock_logs(limit=100):
-    """Fetch recent Stock Parts (out+in) and Cut Key movement log entries,
-    formatted for display. Opens and closes its own connection.
+def get_stock_logs(sp_filters=None, ck_filters=None, limit=200):
+    """Fetch Stock Parts (out+in) and Cut Key movement log entries, each with
+    its own optional filters (date range, specific item, specific employee).
+    Opens and closes its own connection.
     Returns (stock_parts_log, cut_keys_log)."""
     chicago_tz = pytz.timezone('America/Chicago')
     conn = get_db()
 
-    rows = conn.execute('''
-        SELECT m.*, si.name AS item_name, si.barcode, u.first_name, u.last_name
-        FROM stock_movements m
-        JOIN stock_items si ON m.item_id = si.id
-        JOIN users u ON m.user_id = u.id
-        ORDER BY m.created_at DESC
-        LIMIT ?
-    ''', (limit,)).fetchall()
+    def build_query(mode_clause, filters):
+        query = '''
+            SELECT m.*, si.name AS item_name, si.barcode, u.first_name, u.last_name
+            FROM stock_movements m
+            JOIN stock_items si ON m.item_id = si.id
+            JOIN users u ON m.user_id = u.id
+            WHERE ''' + mode_clause
+        params = []
+        if filters:
+            if filters.get('start_date'):
+                query += ' AND date(substr(m.created_at, 1, 10)) >= date(?)'
+                params.append(filters['start_date'])
+            if filters.get('end_date'):
+                query += ' AND date(substr(m.created_at, 1, 10)) <= date(?)'
+                params.append(filters['end_date'])
+            if filters.get('item_id'):
+                query += ' AND si.id = ?'
+                params.append(int(filters['item_id']))
+            if filters.get('user_id'):
+                query += ' AND u.id = ?'
+                params.append(int(filters['user_id']))
+        query += ' ORDER BY m.created_at DESC LIMIT ?'
+        params.append(limit)
+        return query, params
+
+    sp_query, sp_params = build_query("m.mode IN ('stock_parts_out', 'stock_parts_in')", sp_filters)
+    ck_query, ck_params = build_query("m.mode = 'cut_key'", ck_filters)
+
+    sp_rows = conn.execute(sp_query, sp_params).fetchall()
+    ck_rows = conn.execute(ck_query, ck_params).fetchall()
     conn.close()
 
     def fmt(row):
@@ -453,8 +476,8 @@ def get_stock_logs(limit=100):
                 pass
         return d
 
-    stock_parts_log = [fmt(r) for r in rows if r['mode'] in ('stock_parts_out', 'stock_parts_in')]
-    cut_keys_log = [fmt(r) for r in rows if r['mode'] == 'cut_key']
+    stock_parts_log = [fmt(r) for r in sp_rows]
+    cut_keys_log = [fmt(r) for r in ck_rows]
     return stock_parts_log, cut_keys_log
 
 
@@ -1628,7 +1651,6 @@ def admin_dashboard():
             except:
                 pass
     
-    stock_parts_log, cut_keys_log = get_stock_logs()
     stock_conn = get_db()
     # Show ALL items here (active + inactive) so admins can manage/reactivate -
     # the kiosk-facing lookups elsewhere stay active-only.
@@ -1643,6 +1665,20 @@ def admin_dashboard():
         ).fetchone()['c'] > 0
         stock_items.append(item)
     stock_conn.close()
+
+    sp_filters = {
+        'start_date': request.args.get('sp_start_date'),
+        'end_date': request.args.get('sp_end_date'),
+        'item_id': request.args.get('sp_item_id'),
+        'user_id': request.args.get('sp_user_id'),
+    }
+    ck_filters = {
+        'start_date': request.args.get('ck_start_date'),
+        'end_date': request.args.get('ck_end_date'),
+        'item_id': request.args.get('ck_item_id'),
+        'user_id': request.args.get('ck_user_id'),
+    }
+    stock_parts_log, cut_keys_log = get_stock_logs(sp_filters=sp_filters, ck_filters=ck_filters)
 
     return render_template('admin.html', users=users, fobs=fobs, history=history, 
                           reservations=reservations, past_reservations=past_reservations,
@@ -1864,6 +1900,10 @@ def export_stock_log():
         return redirect(url_for('admin_login'))
 
     mode_filter = request.args.get('mode')  # 'stock_parts' (out+in) or 'cut_key', or omitted for everything
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    item_id = request.args.get('item_id')
+    user_id = request.args.get('user_id')
 
     conn = get_db()
     query = '''
@@ -1871,12 +1911,25 @@ def export_stock_log():
         FROM stock_movements m
         JOIN stock_items si ON m.item_id = si.id
         JOIN users u ON m.user_id = u.id
+        WHERE 1=1
     '''
     params = []
     if mode_filter == 'stock_parts':
-        query += " WHERE m.mode IN ('stock_parts_out', 'stock_parts_in')"
+        query += " AND m.mode IN ('stock_parts_out', 'stock_parts_in')"
     elif mode_filter == 'cut_key':
-        query += " WHERE m.mode = 'cut_key'"
+        query += " AND m.mode = 'cut_key'"
+    if start_date:
+        query += ' AND date(substr(m.created_at, 1, 10)) >= date(?)'
+        params.append(start_date)
+    if end_date:
+        query += ' AND date(substr(m.created_at, 1, 10)) <= date(?)'
+        params.append(end_date)
+    if item_id:
+        query += ' AND si.id = ?'
+        params.append(int(item_id))
+    if user_id:
+        query += ' AND u.id = ?'
+        params.append(int(user_id))
     query += ' ORDER BY m.created_at DESC'
 
     rows = conn.execute(query, params).fetchall()
