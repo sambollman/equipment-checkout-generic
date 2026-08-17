@@ -1766,6 +1766,71 @@ def delete_fob(fob_id):
 
     return redirect(url_for('admin_dashboard'))
 
+@app.route('/admin/fob/force-delete/<int:fob_id>', methods=['GET'])
+def force_delete_fob_confirm(fob_id):
+    """Show a confirmation page before permanently deleting an item AND its
+    checkout/note/reservation history together. Requires typing the exact
+    item name to proceed - this is irreversible and removes real records,
+    so it gets a real confirmation page rather than a one-click popup."""
+    if not session.get('admin'):
+        return redirect(url_for('admin_login'))
+
+    conn = get_db()
+    fob = conn.execute('SELECT * FROM key_fobs WHERE id = ?', (fob_id,)).fetchone()
+    if not fob:
+        conn.close()
+        return "Item not found", 404
+
+    checkout_count = conn.execute(
+        'SELECT COUNT(*) as c FROM checkouts WHERE fob_id = ?', (fob_id,)
+    ).fetchone()['c']
+    note_count = conn.execute(
+        'SELECT COUNT(*) as c FROM notes WHERE fob_id = ?', (fob_id,)
+    ).fetchone()['c']
+    reservation_count = conn.execute(
+        'SELECT COUNT(*) as c FROM reservations WHERE fob_id = ?', (fob_id,)
+    ).fetchone()['c']
+    conn.close()
+
+    return render_template('force_delete_fob.html', fob=dict(fob),
+                          checkout_count=checkout_count,
+                          note_count=note_count,
+                          reservation_count=reservation_count)
+
+@app.route('/admin/fob/force-delete/<int:fob_id>', methods=['POST'])
+def force_delete_fob(fob_id):
+    """Permanently delete an item AND every checkout/note/reservation row
+    tied to it, in one all-or-nothing transaction. Only proceeds if the
+    typed confirmation text exactly matches the item's name."""
+    if not session.get('admin'):
+        return redirect(url_for('admin_login'))
+
+    conn = get_db()
+    fob = conn.execute('SELECT * FROM key_fobs WHERE id = ?', (fob_id,)).fetchone()
+    if not fob:
+        conn.close()
+        return "Item not found", 404
+
+    confirm_text = (request.form.get('confirm_name') or '').strip()
+    if confirm_text != fob['vehicle_name']:
+        conn.close()
+        return redirect(url_for('force_delete_fob_confirm', fob_id=fob_id))
+
+    try:
+        conn.execute('BEGIN')
+        conn.execute('DELETE FROM checkouts WHERE fob_id = ?', (fob_id,))
+        conn.execute('DELETE FROM notes WHERE fob_id = ?', (fob_id,))
+        conn.execute('DELETE FROM reservations WHERE fob_id = ?', (fob_id,))
+        conn.execute('DELETE FROM key_fobs WHERE id = ?', (fob_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        conn.close()
+        return "Delete failed - nothing was removed. Please try again or check the server log.", 500
+
+    conn.close()
+    return redirect(url_for('admin_dashboard'))
+
 @app.route('/admin/export/history')
 def export_history():
     """Export checkout history as CSV with optional filters"""

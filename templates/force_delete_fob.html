@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Permanently Delete Item</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f0f0f0; }
+        .form-container { background: white; padding: 30px; border-radius: 8px; max-width: 550px; margin: 0 auto; }
+        h1 { color: #c62828; }
+        .warning-box {
+            background: #fff3e0;
+            border: 1px solid #ff9800;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .warning-box ul { margin: 10px 0 0 0; padding-left: 20px; }
+        .item-name { font-weight: bold; font-size: 1.1em; }
+        label { display: block; margin-top: 20px; font-weight: bold; }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button { margin-top: 20px; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .delete-btn { background-color: #c62828; color: white; }
+        .cancel-btn { background-color: #666; color: white; margin-left: 10px; }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <h1>⚠️ Permanently Delete Item</h1>
+        <p>You're about to permanently delete <span class="item-name">{{ fob.vehicle_name }}</span> ({{ fob.category }}).</p>
+
+        <div class="warning-box">
+            <strong>This will also permanently delete:</strong>
+            <ul>
+                <li>{{ checkout_count }} checkout history record{{ 's' if checkout_count != 1 else '' }}</li>
+                <li>{{ note_count }} note{{ 's' if note_count != 1 else '' }}</li>
+                <li>{{ reservation_count }} reservation{{ 's' if reservation_count != 1 else '' }}</li>
+            </ul>
+            <p style="margin-bottom:0; margin-top:10px;"><strong>This cannot be undone.</strong> If you just want to hide this item from the kiosk while keeping its history, use Deactivate instead.</p>
+        </div>
+
+        <form method="POST">
+            <label>Type the item's exact name to confirm:</label>
+            <input type="text" name="confirm_name" placeholder="{{ fob.vehicle_name }}" required autocomplete="off">
+
+            <button type="submit" class="delete-btn">Permanently Delete Everything</button>
+            <a href="/admin#fobs"><button type="button" class="cancel-btn">Cancel</button></a>
+        </form>
+    </div>
+</body>
+</html>

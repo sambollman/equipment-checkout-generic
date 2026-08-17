@@ -495,7 +495,7 @@
                 {% if not fob.has_checkouts %}
                     <button type="submit" form="fob-delete-{{ fob.id }}" class="btn btn-danger" onclick="return confirm('Delete {{ fob.vehicle_name }} permanently? This cannot be undone.');">Delete</button>
                 {% else %}
-                    <span style="font-size:0.8em; opacity:0.7;" title="Has checkout history - deactivate instead of deleting to preserve the log">Has history</span>
+                    <a href="/admin/fob/force-delete/{{ fob.id }}" style="font-size:0.8em; color:#c62828;" title="Permanently delete this item AND its checkout history">Delete with history</a>
                 {% endif %}
             </td>
         </tr>
