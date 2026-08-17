@@ -1433,11 +1433,26 @@ def admin_dashboard():
             except:
                 pass
         fobs.append(fob_dict)
+
+    # Which fobs have ever been checked out - used to decide whether Delete
+    # is safe (would orphan Recent History rows) or should be blocked in
+    # favor of Deactivate.
+    fobs_with_checkouts = {row['fob_id'] for row in conn.execute(
+        'SELECT DISTINCT fob_id FROM checkouts'
+    ).fetchall()}
+    for fob_dict in fobs:
+        fob_dict['has_checkouts'] = fob_dict['id'] in fobs_with_checkouts
+
+    # Distinct categories for the history report filter dropdown
+    all_categories = [row['category'] for row in conn.execute(
+        'SELECT DISTINCT category FROM key_fobs ORDER BY category'
+    ).fetchall()]
     
     # Get recent checkout history with filters
     hist_start_date = request.args.get('hist_start_date')
     hist_end_date = request.args.get('hist_end_date')
     hist_fob_id = request.args.get('hist_fob_id')
+    hist_category = request.args.get('hist_category')
     hist_user_id = request.args.get('hist_user_id')
     hist_limit = request.args.get('hist_limit', '50')
     
@@ -1468,6 +1483,10 @@ def admin_dashboard():
     if hist_fob_id:
         history_query += ' AND kf.id = ?'
         params.append(int(hist_fob_id))
+
+    if hist_category:
+        history_query += ' AND kf.category = ?'
+        params.append(hist_category)
     
     if hist_user_id:
         history_query += ' AND u.id = ?'
@@ -1628,7 +1647,7 @@ def admin_dashboard():
     return render_template('admin.html', users=users, fobs=fobs, history=history, 
                           reservations=reservations, past_reservations=past_reservations,
                           stock_parts_log=stock_parts_log, cut_keys_log=cut_keys_log,
-                          stock_items=stock_items)
+                          stock_items=stock_items, categories=all_categories)
 
     
     conn.close()
@@ -1687,6 +1706,30 @@ def activate_fob(fob_id):
     
     return redirect(url_for('admin_dashboard'))
 
+@app.route('/admin/fob/delete/<int:fob_id>', methods=['POST'])
+def delete_fob(fob_id):
+    """Permanently delete a key fob/item. Refuses if it has any checkout
+    history, since that would orphan rows in Recent History - deactivate
+    instead to preserve the audit trail. Safe for test items or things
+    entered in error that were never actually checked out."""
+    if not session.get('admin'):
+        return redirect(url_for('admin_login'))
+
+    conn = get_db()
+    checkout_count = conn.execute(
+        'SELECT COUNT(*) as c FROM checkouts WHERE fob_id = ?', (fob_id,)
+    ).fetchone()['c']
+
+    if checkout_count > 0:
+        conn.close()
+        return redirect(url_for('admin_dashboard'))
+
+    conn.execute('DELETE FROM key_fobs WHERE id = ?', (fob_id,))
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for('admin_dashboard'))
+
 @app.route('/admin/export/history')
 def export_history():
     """Export checkout history as CSV with optional filters"""
@@ -1697,6 +1740,7 @@ def export_history():
     start_date = request.args.get('hist_start_date') or request.args.get('start_date')
     end_date = request.args.get('hist_end_date') or request.args.get('end_date')
     fob_id = request.args.get('hist_fob_id') or request.args.get('fob_id')
+    category = request.args.get('hist_category') or request.args.get('category')
     user_id = request.args.get('hist_user_id') or request.args.get('user_id')
     
     conn = get_db()
@@ -1739,6 +1783,10 @@ def export_history():
     if fob_id:
         query += ' AND kf.id = ?'
         params.append(int(fob_id))
+
+    if category:
+        query += ' AND kf.category = ?'
+        params.append(category)
     
     if user_id:
         query += ' AND u.id = ?'

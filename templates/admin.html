@@ -492,10 +492,20 @@
                 {% else %}
                     <a href="/admin/fob/activate/{{ fob.id }}#fobs" class="btn btn-success">Activate</a>
                 {% endif %}
+                {% if not fob.has_checkouts %}
+                    <button type="submit" form="fob-delete-{{ fob.id }}" class="btn btn-danger" onclick="return confirm('Delete {{ fob.vehicle_name }} permanently? This cannot be undone.');">Delete</button>
+                {% else %}
+                    <span style="font-size:0.8em; opacity:0.7;" title="Has checkout history - deactivate instead of deleting to preserve the log">Has history</span>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}
     </table>
+    {% for fob in fobs %}
+    {% if not fob.has_checkouts %}
+    <form id="fob-delete-{{ fob.id }}" method="POST" action="/admin/fob/delete/{{ fob.id }}"></form>
+    {% endif %}
+    {% endfor %}
 </div>
 
 <!-- Recent Checkout History Tab Content -->
@@ -522,6 +532,18 @@
                     {% for fob in fobs %}
                     <option value="{{ fob.id }}" {% if request.args.get('hist_fob_id') == fob.id|string %}selected{% endif %}>
                         {{ fob.vehicle_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Category:</label>
+                <select name="hist_category" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="">All Categories</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat }}" {% if request.args.get('hist_category') == cat %}selected{% endif %}>
+                        {{ cat }}
                     </option>
                     {% endfor %}
                 </select>
