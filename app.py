@@ -1367,6 +1367,43 @@ def api_add_note():
         return {'error': str(e)}, 500
 
 
+@app.route('/api/reservation/create', methods=['POST'])
+@require_kiosk_auth
+def api_create_reservation():
+    """Create a reservation from the kiosk. This is the kiosk-facing
+    equivalent of the admin-only /admin/fob/reserve/<id> form - it's what
+    lets a tech reserve equipment right at the kiosk without needing admin
+    login. Same reservations table, same fields, just reachable via kiosk
+    Basic Auth instead of an admin session."""
+    data = request.get_json()
+
+    fob_id = data.get('fob_id')
+    reserved_datetime = data.get('reserved_datetime')  # ISO string, already localized
+    user_id = data.get('user_id')  # optional - who scanned their card to make it
+    reserved_for_name = data.get('reserved_for_name')  # optional - free text if different from user_id
+    reason = data.get('reason', '')
+    display_hours_before = data.get('display_hours_before', 24)
+    created_by = data.get('created_by', 'kiosk')
+
+    if not fob_id or not reserved_datetime:
+        return {'error': 'Missing fob_id or reserved_datetime'}, 400
+
+    conn = get_db()
+    try:
+        conn.execute('''
+            INSERT INTO reservations (fob_id, user_id, reserved_for_name, reserved_datetime, display_hours_before, reason, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (fob_id, user_id, reserved_for_name, reserved_datetime, display_hours_before, reason, created_by))
+        conn.commit()
+        conn.close()
+
+        socketio.emit('status_update', get_current_status())
+
+        return {'status': 'success', 'message': 'Reservation created'}, 201
+    except Exception as e:
+        conn.close()
+        return {'error': str(e)}, 500
+
 
 @app.route('/admin/logout')
 def admin_logout():

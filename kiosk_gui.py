@@ -37,6 +37,9 @@ class KioskGUI:
         # self.stock_mode is one of: None, 'stock_parts_out', 'stock_parts_in', 'cut_key'
         self.stock_mode = None
         self.stock_scanned_items = []  # [{'barcode', 'name', 'quantity', 'on_hand_qty'}]
+        # Reservation mode - tech reserves an item for a future date/time
+        self.reservation_mode = False
+        self.pending_reservation_fob = None
 
         # Create main window
         self.root = tk.Tk()
@@ -426,6 +429,37 @@ class KioskGUI:
                     'fob_id': fob_id,
                     'note_text': note_text,
                     'expires_at': expires_at
+                },
+                timeout=5
+            )
+            if response.status_code == 201:
+                return True, None
+            else:
+                error_msg = response.json().get('error', 'Unknown error')
+                return False, error_msg
+        except Exception as e:
+            if self.is_network_error(e):
+                self.show_offline_screen()
+                return False, None
+            return False, str(e)
+
+    def create_reservation_api(self, fob_id, reserved_datetime, user_id=None,
+                               reserved_for_name=None, reason='', display_hours_before=24):
+        """Create a reservation via API - the kiosk-facing counterpart to the
+        admin-only reservation form."""
+        try:
+            response = requests.post(
+                f'{SERVER_URL}/api/reservation/create',
+                auth=(KIOSK_USER, KIOSK_PASS),
+                json={
+                    'fob_id': fob_id,
+                    'reserved_datetime': reserved_datetime,
+                    'user_id': user_id,
+                    'reserved_for_name': reserved_for_name,
+                    'reason': reason,
+                    'display_hours_before': display_hours_before,
+                    'created_by': self.current_user['first_name'] + ' ' + self.current_user['last_name']
+                                  if self.current_user else 'kiosk'
                 },
                 timeout=5
             )
@@ -988,6 +1022,8 @@ class KioskGUI:
         self.add_new_mode = False
         self.stock_mode = None
         self.stock_scanned_items = []
+        self.reservation_mode = False
+        self.pending_reservation_fob = None
     
         # Big icon/emoji
         icon_label = tk.Label(
@@ -1125,6 +1161,23 @@ class KioskGUI:
             command=self.replace_card
         )
         card_btn.pack(side='left', padx=10)
+
+        # Button container - Fifth row
+        button_frame5 = tk.Frame(self.message_frame, bg='black')
+        button_frame5.pack(pady=10)
+
+        # Reserve button
+        reserve_btn = tk.Button(
+            button_frame5,
+            text="📅 Reserve",
+            font=font.Font(size=16, weight='bold'),
+            bg='#3F51B5',
+            fg='white',
+            width=15,
+            height=2,
+            command=self.start_reservation
+        )
+        reserve_btn.pack(side='left', padx=10)
 
         # Instructions
         self.entry.focus_set()
@@ -1978,10 +2031,10 @@ class KioskGUI:
         self.root.after(3000, self.show_welcome)
     
     def show_scan_error(self, message, icon="❓", color="#666"):
-        """Show a scan error WITHOUT ending a Bulk Checkout or Stock Parts/
-        Cut Keys session - returns to whichever screen the person was on
-        (with their scanned items and user still intact) instead of
-        resetting all the way back to the welcome screen."""
+        """Show a scan error WITHOUT ending a Bulk Checkout, Stock Parts/
+        Cut Keys, or Reservation session - returns to whichever screen the
+        person was on (with their scanned items and user still intact)
+        instead of resetting all the way back to the welcome screen."""
         self.clear_message_frame()
         tk.Label(self.message_frame, text=icon, font=font.Font(size=100),
                  fg=color, bg='black').pack(pady=(50, 20))
@@ -1992,8 +2045,29 @@ class KioskGUI:
             self.root.after(2500, self.show_bulk_scanning)
         elif self.stock_mode:
             self.root.after(2500, self.show_stock_scanning)
+        elif self.reservation_mode and not self.pending_reservation_fob:
+            self.root.after(2500, self.show_reservation_scan_prompt)
         else:
             self.root.after(3000, self.show_welcome)
+
+    def show_reservation_scan_prompt(self):
+        """Redraw the 'scan the item to reserve' screen (used both when
+        starting reservation mode and when returning to it after a scan
+        error, so the session isn't lost)."""
+        self.clear_message_frame()
+        tk.Label(self.message_frame, text="📅", font=font.Font(size=120),
+              fg='#3F51B5', bg='black').pack(pady=(50, 30))
+        tk.Label(self.message_frame, text="Reserve Item",
+              font=self.header_font, fg='#3F51B5', bg='black').pack(pady=(0, 20))
+        tk.Label(self.message_frame, text="Scan the item to reserve",
+              font=self.body_font, fg='white', bg='black').pack()
+        cancel_btn = tk.Button(
+            self.message_frame, text="❌ Cancel",
+            font=font.Font(size=16, weight='bold'), bg='#f44336', fg='white',
+            width=15, height=2, command=self.cancel_reservation
+        )
+        cancel_btn.pack(pady=20)
+        self.instructions_label.config(text="Session will timeout after 60 seconds")
 
     def on_key_press(self, event):
         """Handle keyboard input"""
@@ -2102,6 +2176,17 @@ class KioskGUI:
     
     def handle_card_scan(self, card_id):
         """Handle a card scan"""
+        # Check if in reservation mode, waiting for the employee's card
+        if self.reservation_mode and self.pending_reservation_fob and not self.current_user:
+            found, user = self.lookup_api('user', card_id)
+            if not found or not user:
+                self.show_scan_error("Unknown card. Please register at the admin panel.",
+                                      icon="⚠️", color="#FF9800")
+                return
+            self.current_user = user
+            self.prompt_reservation_details(self.pending_reservation_fob, user)
+            return
+
         # Check if in bulk checkout mode
         if self.bulk_checkout_mode and not self.current_user:
             # Look up user via API
@@ -2329,6 +2414,27 @@ class KioskGUI:
 
     def handle_fob_scan(self, fob_id):
         """Handle a fob scan"""
+        # Check if in reservation mode, waiting for the item to reserve
+        if self.reservation_mode and not self.pending_reservation_fob:
+            found, fob = self.lookup_api('fob', fob_id)
+            if not found or not fob:
+                self.show_scan_error(
+                    "Item not recognized.\nUse the ➕ Add New button to register new equipment.",
+                    icon="⚠️", color="#FF9800"
+                )
+                return
+            self.pending_reservation_fob = fob
+            self.clear_message_frame()
+            tk.Label(self.message_frame, text="📅", font=font.Font(size=120),
+                  fg='#3F51B5', bg='black').pack(pady=(50, 30))
+            tk.Label(self.message_frame, text=f"Reserving {fob['vehicle_name']}",
+                  font=self.header_font, fg='#3F51B5', bg='black', justify='center').pack(pady=(0, 20))
+            tk.Label(self.message_frame, text="Scan your keycard to continue",
+                  font=self.body_font, fg='white', bg='black').pack()
+            self.instructions_label.config(text="Session will timeout after 60 seconds")
+            self.last_scan_time = datetime.now()
+            return
+
         # Check if in note mode
         if self.note_mode:
             print("DEBUG: In note mode, fob_id:", fob_id)
@@ -2755,7 +2861,7 @@ class KioskGUI:
 
     def check_timeout_loop(self):
         """Check for session timeout"""
-        if (self.current_user or self.replace_mode or self.note_mode or self.pending_fob or self.stock_mode) and self.last_scan_time:
+        if (self.current_user or self.replace_mode or self.note_mode or self.pending_fob or self.stock_mode or self.reservation_mode) and self.last_scan_time:
             elapsed = (datetime.now() - self.last_scan_time).total_seconds()
             timeout_limit = self.extended_scan_timeout if (self.bulk_checkout_mode or self.stock_mode) else self.scan_timeout
             if elapsed > timeout_limit:
@@ -2768,6 +2874,8 @@ class KioskGUI:
                 self.note_mode = False
                 self.stock_mode = None
                 self.stock_scanned_items = []
+                self.reservation_mode = False
+                self.pending_reservation_fob = None
       
         # Check again in 1 second
         self.root.after(1000, self.check_timeout_loop)
@@ -2856,6 +2964,271 @@ class KioskGUI:
         else:
             # Cancelled
             self.show_welcome()
+
+    def start_reservation(self):
+        """Button handler - reserve an item for a future date/time.
+        Asks whether the tech has the item with them (scan) or needs to
+        pick it from a list, then scans an employee card to log who made
+        the reservation, then collects the date/time and reason."""
+        from tkinter import Toplevel, Button, Label
+
+        result = [None]
+
+        def on_yes():
+            result[0] = True
+            dialog.destroy()
+
+        def on_no():
+            result[0] = False
+            dialog.destroy()
+
+        dialog = Toplevel(self.root)
+        dialog.title("Reserve Item")
+        dialog.geometry("700x400")
+        dialog.configure(bg='white')
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        Label(dialog, text="📅", font=font.Font(size=80),
+              bg='white', fg='#3F51B5').pack(pady=(30, 20))
+
+        Label(dialog, text="Do you have the item with you?",
+              font=font.Font(size=20, weight='bold'), bg='white').pack(pady=(0, 30))
+
+        button_frame = tk.Frame(dialog, bg='white')
+        button_frame.pack(pady=20)
+
+        Button(button_frame, text="Yes - I'll Scan It", command=on_yes,
+               font=font.Font(size=18), bg='#4CAF50', fg='white',
+               width=18, height=2).pack(side='left', padx=10)
+
+        Button(button_frame, text="No - Select from List", command=on_no,
+               font=font.Font(size=18), bg='#2196F3', fg='white',
+               width=20, height=2).pack(side='left', padx=10)
+
+        dialog.wait_window()
+
+        if result[0] is True:
+            self.reservation_mode = True
+            self.show_reservation_scan_prompt()
+            self.last_scan_time = datetime.now()
+        elif result[0] is False:
+            self.reservation_mode = True
+            self.show_equipment_list_for_reservation()
+        else:
+            self.show_welcome()
+
+    def cancel_reservation(self):
+        """Cancel reservation mode and return to welcome"""
+        self.reservation_mode = False
+        self.pending_reservation_fob = None
+        self.show_welcome()
+
+    def show_equipment_list_for_reservation(self):
+        """Show list of all equipment to select for reservation"""
+        from tkinter import Toplevel, Button, Label, Listbox, Scrollbar, SINGLE
+
+        success, all_items = self.list_equipment_api()
+
+        if not success or not all_items:
+            self.reservation_mode = False
+            self.show_error("No equipment found")
+            return
+
+        result = [None]
+
+        def on_select():
+            selection = listbox.curselection()
+            if selection and selection[0] in item_indices:
+                actual_index = item_indices[selection[0]]
+                result[0] = all_items[actual_index]
+                dialog.destroy()
+
+        dialog = Toplevel(self.root)
+        dialog.title("Reserve - Select Equipment")
+        dialog.geometry("900x850")
+        dialog.configure(bg='white')
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        Label(dialog, text="📅 Reserve Equipment",
+              font=font.Font(size=20, weight='bold'), bg='white').pack(pady=(20, 10))
+        Label(dialog, text="Select the item:",
+              font=font.Font(size=14), bg='white').pack(pady=(0, 20))
+
+        list_frame = tk.Frame(dialog, bg='white')
+        list_frame.pack(fill='both', expand=True, padx=20, pady=(0, 20))
+
+        scrollbar = Scrollbar(list_frame)
+        scrollbar.pack(side='right', fill='y')
+
+        listbox = Listbox(list_frame, font=font.Font(size=14), height=25,
+                         yscrollcommand=scrollbar.set, selectmode=SINGLE)
+        listbox.pack(side='left', fill='both', expand=True)
+        scrollbar.config(command=listbox.yview)
+
+        item_indices = {}
+        listbox_index = 0
+        current_category = None
+
+        for i, item in enumerate(all_items):
+            if item['category'] != current_category:
+                current_category = item['category']
+                listbox.insert('end', f"--- {current_category} ---")
+                listbox.itemconfig(listbox_index, {'bg': '#E0E0E0', 'fg': '#666'})
+                listbox_index += 1
+            listbox.insert('end', f"  {item['vehicle_name']}")
+            item_indices[listbox_index] = i
+            listbox_index += 1
+
+        button_frame = tk.Frame(dialog, bg='white')
+        button_frame.pack(pady=20)
+
+        Button(button_frame, text="Select", command=on_select,
+               font=font.Font(size=16), bg='#3F51B5', fg='white',
+               width=15, height=2).pack(side='left', padx=10)
+        Button(button_frame, text="Cancel", command=dialog.destroy,
+               font=font.Font(size=16), bg='#999', fg='white',
+               width=12, height=2).pack(side='left', padx=10)
+
+        dialog.wait_window()
+
+        if result[0]:
+            self.pending_reservation_fob = result[0]
+            self.clear_message_frame()
+            tk.Label(self.message_frame, text="📅", font=font.Font(size=120),
+                  fg='#3F51B5', bg='black').pack(pady=(50, 30))
+            tk.Label(self.message_frame, text=f"Reserving {result[0]['vehicle_name']}",
+                  font=self.header_font, fg='#3F51B5', bg='black', justify='center').pack(pady=(0, 20))
+            tk.Label(self.message_frame, text="Scan your keycard to continue",
+                  font=self.body_font, fg='white', bg='black').pack()
+            self.instructions_label.config(text="Session will timeout after 60 seconds")
+            self.last_scan_time = datetime.now()
+        else:
+            self.cancel_reservation()
+
+    def prompt_reservation_details(self, fob, user):
+        """Show a dialog collecting the reservation date/time and reason,
+        then submit it. Reuses the same simple two-field date/time entry
+        pattern already proven for note expirations, rather than a fancier
+        calendar widget."""
+        from tkinter import Toplevel, Label, Button, Entry, Text
+
+        result = {'submitted': False}
+
+        def on_submit():
+            date_str = date_entry.get().strip()
+            time_str = time_entry.get().strip()
+            reserved_for = reserved_for_entry.get().strip()
+            reason_text = reason_text_widget.get("1.0", "end-1c").strip()
+
+            if not date_str or not time_str:
+                return
+
+            try:
+                chicago_tz = pytz.timezone('America/Chicago')
+                dt = datetime.strptime(f"{date_str} {time_str}", '%m/%d/%Y %H:%M')
+                dt_aware = chicago_tz.localize(dt)
+            except Exception:
+                date_entry.config(bg='#ffcccc')
+                time_entry.config(bg='#ffcccc')
+                return
+
+            result['submitted'] = True
+            result['reserved_datetime'] = dt_aware.isoformat()
+            result['reserved_for'] = reserved_for
+            result['reason'] = reason_text
+            dialog.destroy()
+
+        def on_cancel():
+            dialog.destroy()
+
+        dialog = Toplevel(self.root)
+        dialog.title("Reservation Details")
+        dialog.geometry("650x650")
+        dialog.configure(bg='white')
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        Label(dialog, text="📅", font=font.Font(size=60),
+              bg='white', fg='#3F51B5').pack(pady=(20, 10))
+        Label(dialog, text=f"Reserve {fob['vehicle_name']}",
+              font=font.Font(size=20, weight='bold'), bg='white').pack(pady=(0, 20))
+
+        date_time_frame = tk.Frame(dialog, bg='white')
+        date_time_frame.pack(pady=10)
+
+        Label(date_time_frame, text="Date (MM/DD/YYYY):",
+              font=font.Font(size=13), bg='white').pack(side='left', padx=5)
+
+        chicago_tz = pytz.timezone('America/Chicago')
+        tomorrow = datetime.now(chicago_tz) + timedelta(days=1)
+
+        date_entry = Entry(date_time_frame, font=font.Font(size=14), width=12)
+        date_entry.insert(0, tomorrow.strftime('%m/%d/%Y'))
+        date_entry.pack(side='left', padx=5)
+
+        Label(date_time_frame, text="Time (HH:MM):",
+              font=font.Font(size=13), bg='white').pack(side='left', padx=5)
+
+        time_entry = Entry(date_time_frame, font=font.Font(size=14), width=8)
+        time_entry.insert(0, "08:00")
+        time_entry.pack(side='left', padx=5)
+
+        Label(dialog, text="Reserved for (defaults to you):",
+              font=font.Font(size=13), bg='white').pack(pady=(20, 0))
+        reserved_for_entry = Entry(dialog, font=font.Font(size=16), width=30)
+        reserved_for_entry.insert(0, f"{user['first_name']} {user['last_name']}")
+        reserved_for_entry.pack(pady=(5, 10))
+
+        Label(dialog, text="Reason (e.g. 'Job at 123 Main St'):",
+              font=font.Font(size=13), bg='white').pack(pady=(10, 0))
+        reason_text_widget = Text(dialog, font=font.Font(size=15), width=45, height=4,
+                                   wrap='word', bg='#f0f0f0')
+        reason_text_widget.pack(pady=10, padx=20)
+
+        button_frame = tk.Frame(dialog, bg='white')
+        button_frame.pack(pady=20)
+
+        Button(button_frame, text="Create Reservation", command=on_submit,
+               font=font.Font(size=16), bg='#3F51B5', fg='white',
+               width=18, height=2).pack(side='left', padx=10)
+        Button(button_frame, text="Cancel", command=on_cancel,
+               font=font.Font(size=16), bg='#666', fg='white',
+               width=12, height=2).pack(side='left', padx=10)
+
+        dialog.wait_window()
+
+        if not result.get('submitted'):
+            self.reservation_mode = False
+            self.pending_reservation_fob = None
+            self.current_user = None
+            self.show_welcome()
+            return
+
+        success, error = self.create_reservation_api(
+            fob['id'], result['reserved_datetime'],
+            user_id=user['id'],
+            reserved_for_name=result['reserved_for'] or None,
+            reason=result['reason']
+        )
+
+        self.reservation_mode = False
+        self.pending_reservation_fob = None
+        self.current_user = None
+
+        if not success:
+            self.show_error(f"Failed to create reservation: {error}")
+            return
+
+        self.notify_server()
+
+        self.clear_message_frame()
+        tk.Label(self.message_frame, text="✅", font=font.Font(size=120),
+              fg='#4CAF50', bg='black').pack(pady=(50, 30))
+        tk.Label(self.message_frame, text=f"{fob['vehicle_name']}\nreserved!",
+              font=self.header_font, fg='#4CAF50', bg='black', justify='center').pack()
+        self.root.after(3000, self.show_welcome)
 
     def show_equipment_list_for_note(self):
         """Show list of all equipment to select for adding note"""
