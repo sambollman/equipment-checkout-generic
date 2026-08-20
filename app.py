@@ -1405,6 +1405,76 @@ def api_create_reservation():
         return {'error': str(e)}, 500
 
 
+@app.route('/api/reservation/update', methods=['POST'])
+@require_kiosk_auth
+def api_update_reservation():
+    """Update an existing reservation from the kiosk - the kiosk-facing
+    equivalent of the admin-only edit_reservation form. Only the fields a
+    tech would reasonably need to change at the kiosk (when, who for, why)
+    are editable here; the original creator (created_by) is left alone."""
+    data = request.get_json()
+
+    reservation_id = data.get('reservation_id')
+    reserved_datetime = data.get('reserved_datetime')
+    reason = data.get('reason', '')
+    reserved_for_name = data.get('reserved_for_name')
+
+    if not reservation_id or not reserved_datetime:
+        return {'error': 'Missing reservation_id or reserved_datetime'}, 400
+
+    conn = get_db()
+    try:
+        existing = conn.execute('SELECT * FROM reservations WHERE id = ?', (reservation_id,)).fetchone()
+        if not existing:
+            conn.close()
+            return {'error': 'Reservation not found'}, 404
+
+        conn.execute('''
+            UPDATE reservations
+            SET reserved_datetime = ?, reason = ?, reserved_for_name = ?
+            WHERE id = ?
+        ''', (reserved_datetime, reason, reserved_for_name, reservation_id))
+        conn.commit()
+        conn.close()
+
+        socketio.emit('status_update', get_current_status())
+
+        return {'status': 'success', 'message': 'Reservation updated'}, 200
+    except Exception as e:
+        conn.close()
+        return {'error': str(e)}, 500
+
+
+@app.route('/api/reservation/delete', methods=['POST'])
+@require_kiosk_auth
+def api_delete_reservation_kiosk():
+    """Cancel/delete a reservation from the kiosk - the kiosk-facing
+    equivalent of the admin-only delete_reservation route."""
+    data = request.get_json()
+
+    reservation_id = data.get('reservation_id')
+    if not reservation_id:
+        return {'error': 'Missing reservation_id'}, 400
+
+    conn = get_db()
+    try:
+        existing = conn.execute('SELECT * FROM reservations WHERE id = ?', (reservation_id,)).fetchone()
+        if not existing:
+            conn.close()
+            return {'error': 'Reservation not found'}, 404
+
+        conn.execute('DELETE FROM reservations WHERE id = ?', (reservation_id,))
+        conn.commit()
+        conn.close()
+
+        socketio.emit('status_update', get_current_status())
+
+        return {'status': 'success', 'message': 'Reservation cancelled'}, 200
+    except Exception as e:
+        conn.close()
+        return {'error': str(e)}, 500
+
+
 @app.route('/admin/logout')
 def admin_logout():
     """Logout admin"""

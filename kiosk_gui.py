@@ -40,6 +40,8 @@ class KioskGUI:
         # Reservation mode - tech reserves an item for a future date/time
         self.reservation_mode = False
         self.pending_reservation_fob = None
+        # Manage mode - tech edits or cancels an existing reservation
+        self.manage_reservation_mode = False
 
         # Create main window
         self.root = tk.Tk()
@@ -464,6 +466,51 @@ class KioskGUI:
                 timeout=5
             )
             if response.status_code == 201:
+                return True, None
+            else:
+                error_msg = response.json().get('error', 'Unknown error')
+                return False, error_msg
+        except Exception as e:
+            if self.is_network_error(e):
+                self.show_offline_screen()
+                return False, None
+            return False, str(e)
+
+    def update_reservation_api(self, reservation_id, reserved_datetime, reason='', reserved_for_name=None):
+        """Update an existing reservation via API"""
+        try:
+            response = requests.post(
+                f'{SERVER_URL}/api/reservation/update',
+                auth=(KIOSK_USER, KIOSK_PASS),
+                json={
+                    'reservation_id': reservation_id,
+                    'reserved_datetime': reserved_datetime,
+                    'reason': reason,
+                    'reserved_for_name': reserved_for_name
+                },
+                timeout=5
+            )
+            if response.status_code == 200:
+                return True, None
+            else:
+                error_msg = response.json().get('error', 'Unknown error')
+                return False, error_msg
+        except Exception as e:
+            if self.is_network_error(e):
+                self.show_offline_screen()
+                return False, None
+            return False, str(e)
+
+    def delete_reservation_api(self, reservation_id):
+        """Cancel/delete a reservation via API"""
+        try:
+            response = requests.post(
+                f'{SERVER_URL}/api/reservation/delete',
+                auth=(KIOSK_USER, KIOSK_PASS),
+                json={'reservation_id': reservation_id},
+                timeout=5
+            )
+            if response.status_code == 200:
                 return True, None
             else:
                 error_msg = response.json().get('error', 'Unknown error')
@@ -1024,6 +1071,7 @@ class KioskGUI:
         self.stock_scanned_items = []
         self.reservation_mode = False
         self.pending_reservation_fob = None
+        self.manage_reservation_mode = False
     
         # Big icon/emoji
         icon_label = tk.Label(
@@ -1178,6 +1226,19 @@ class KioskGUI:
             command=self.start_reservation
         )
         reserve_btn.pack(side='left', padx=10)
+
+        # Edit/Cancel Reservation button
+        manage_reservation_btn = tk.Button(
+            button_frame5,
+            text="✏️ Edit/Cancel Reservation",
+            font=font.Font(size=16, weight='bold'),
+            bg='#5C6BC0',
+            fg='white',
+            width=22,
+            height=2,
+            command=self.start_manage_reservation
+        )
+        manage_reservation_btn.pack(side='left', padx=10)
 
         # Instructions
         self.entry.focus_set()
@@ -2047,8 +2108,28 @@ class KioskGUI:
             self.root.after(2500, self.show_stock_scanning)
         elif self.reservation_mode and not self.pending_reservation_fob:
             self.root.after(2500, self.show_reservation_scan_prompt)
+        elif self.manage_reservation_mode:
+            self.root.after(2500, self.show_manage_reservation_scan_prompt)
         else:
             self.root.after(3000, self.show_welcome)
+
+    def show_manage_reservation_scan_prompt(self):
+        """Redraw the 'scan the item' screen for Edit/Cancel Reservation
+        (used both when starting the mode and after a scan error)."""
+        self.clear_message_frame()
+        tk.Label(self.message_frame, text="✏️", font=font.Font(size=120),
+              fg='#5C6BC0', bg='black').pack(pady=(50, 30))
+        tk.Label(self.message_frame, text="Edit/Cancel Reservation",
+              font=self.header_font, fg='#5C6BC0', bg='black').pack(pady=(0, 20))
+        tk.Label(self.message_frame, text="Scan the item",
+              font=self.body_font, fg='white', bg='black').pack()
+        cancel_btn = tk.Button(
+            self.message_frame, text="❌ Cancel",
+            font=font.Font(size=16, weight='bold'), bg='#f44336', fg='white',
+            width=15, height=2, command=self.cancel_manage_reservation
+        )
+        cancel_btn.pack(pady=20)
+        self.instructions_label.config(text="Session will timeout after 60 seconds")
 
     def show_reservation_scan_prompt(self):
         """Redraw the 'scan the item to reserve' screen (used both when
@@ -2414,6 +2495,16 @@ class KioskGUI:
 
     def handle_fob_scan(self, fob_id):
         """Handle a fob scan"""
+        # Check if in manage-reservation mode, waiting for the item to scan
+        if self.manage_reservation_mode:
+            found, fob = self.lookup_api('fob', fob_id)
+            self.manage_reservation_mode = False
+            if not found or not fob:
+                self.show_error("Item not recognized.")
+                return
+            self.process_manage_reservation_item(fob)
+            return
+
         # Check if in reservation mode, waiting for the item to reserve
         if self.reservation_mode and not self.pending_reservation_fob:
             found, fob = self.lookup_api('fob', fob_id)
@@ -2861,7 +2952,7 @@ class KioskGUI:
 
     def check_timeout_loop(self):
         """Check for session timeout"""
-        if (self.current_user or self.replace_mode or self.note_mode or self.pending_fob or self.stock_mode or self.reservation_mode) and self.last_scan_time:
+        if (self.current_user or self.replace_mode or self.note_mode or self.pending_fob or self.stock_mode or self.reservation_mode or self.manage_reservation_mode) and self.last_scan_time:
             elapsed = (datetime.now() - self.last_scan_time).total_seconds()
             timeout_limit = self.extended_scan_timeout if (self.bulk_checkout_mode or self.stock_mode) else self.scan_timeout
             if elapsed > timeout_limit:
@@ -2876,6 +2967,7 @@ class KioskGUI:
                 self.stock_scanned_items = []
                 self.reservation_mode = False
                 self.pending_reservation_fob = None
+                self.manage_reservation_mode = False
       
         # Check again in 1 second
         self.root.after(1000, self.check_timeout_loop)
@@ -3227,6 +3319,404 @@ class KioskGUI:
         tk.Label(self.message_frame, text="✅", font=font.Font(size=120),
               fg='#4CAF50', bg='black').pack(pady=(50, 30))
         tk.Label(self.message_frame, text=f"{fob['vehicle_name']}\nreserved!",
+              font=self.header_font, fg='#4CAF50', bg='black', justify='center').pack()
+        self.root.after(3000, self.show_welcome)
+
+    def start_manage_reservation(self):
+        """Button handler - edit or cancel an item's existing reservation.
+        Same 'do you have it' pattern as Reserve, but no employee card scan
+        needed since we're not creating a record attributing a new action -
+        just changing/removing one that already exists."""
+        from tkinter import Toplevel, Button, Label
+
+        result = [None]
+
+        def on_yes():
+            result[0] = True
+            dialog.destroy()
+
+        def on_no():
+            result[0] = False
+            dialog.destroy()
+
+        dialog = Toplevel(self.root)
+        dialog.title("Edit/Cancel Reservation")
+        dialog.geometry("700x400")
+        dialog.configure(bg='white')
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        Label(dialog, text="✏️", font=font.Font(size=80),
+              bg='white', fg='#5C6BC0').pack(pady=(30, 20))
+        Label(dialog, text="Do you have the item with you?",
+              font=font.Font(size=20, weight='bold'), bg='white').pack(pady=(0, 30))
+
+        button_frame = tk.Frame(dialog, bg='white')
+        button_frame.pack(pady=20)
+
+        Button(button_frame, text="Yes - I'll Scan It", command=on_yes,
+               font=font.Font(size=18), bg='#4CAF50', fg='white',
+               width=18, height=2).pack(side='left', padx=10)
+        Button(button_frame, text="No - Select from List", command=on_no,
+               font=font.Font(size=18), bg='#2196F3', fg='white',
+               width=20, height=2).pack(side='left', padx=10)
+
+        dialog.wait_window()
+
+        if result[0] is True:
+            self.manage_reservation_mode = True
+            self.show_manage_reservation_scan_prompt()
+            self.last_scan_time = datetime.now()
+        elif result[0] is False:
+            self.manage_reservation_mode = True
+            self.show_equipment_list_for_manage_reservation()
+        else:
+            self.show_welcome()
+
+    def cancel_manage_reservation(self):
+        """Cancel manage-reservation mode and return to welcome"""
+        self.manage_reservation_mode = False
+        self.show_welcome()
+
+    def show_equipment_list_for_manage_reservation(self):
+        """Show list of all equipment to select for editing/cancelling a reservation"""
+        from tkinter import Toplevel, Button, Label, Listbox, Scrollbar, SINGLE
+
+        success, all_items = self.list_equipment_api()
+
+        if not success or not all_items:
+            self.manage_reservation_mode = False
+            self.show_error("No equipment found")
+            return
+
+        result = [None]
+
+        def on_select():
+            selection = listbox.curselection()
+            if selection and selection[0] in item_indices:
+                actual_index = item_indices[selection[0]]
+                result[0] = all_items[actual_index]
+                dialog.destroy()
+
+        dialog = Toplevel(self.root)
+        dialog.title("Select Equipment")
+        dialog.geometry("900x850")
+        dialog.configure(bg='white')
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        Label(dialog, text="✏️ Edit/Cancel Reservation",
+              font=font.Font(size=20, weight='bold'), bg='white').pack(pady=(20, 10))
+        Label(dialog, text="Select the item:",
+              font=font.Font(size=14), bg='white').pack(pady=(0, 20))
+
+        list_frame = tk.Frame(dialog, bg='white')
+        list_frame.pack(fill='both', expand=True, padx=20, pady=(0, 20))
+
+        scrollbar = Scrollbar(list_frame)
+        scrollbar.pack(side='right', fill='y')
+
+        listbox = Listbox(list_frame, font=font.Font(size=14), height=25,
+                         yscrollcommand=scrollbar.set, selectmode=SINGLE)
+        listbox.pack(side='left', fill='both', expand=True)
+        scrollbar.config(command=listbox.yview)
+
+        item_indices = {}
+        listbox_index = 0
+        current_category = None
+
+        for i, item in enumerate(all_items):
+            if item['category'] != current_category:
+                current_category = item['category']
+                listbox.insert('end', f"--- {current_category} ---")
+                listbox.itemconfig(listbox_index, {'bg': '#E0E0E0', 'fg': '#666'})
+                listbox_index += 1
+            listbox.insert('end', f"  {item['vehicle_name']}")
+            item_indices[listbox_index] = i
+            listbox_index += 1
+
+        button_frame = tk.Frame(dialog, bg='white')
+        button_frame.pack(pady=20)
+
+        Button(button_frame, text="Select", command=on_select,
+               font=font.Font(size=16), bg='#5C6BC0', fg='white',
+               width=15, height=2).pack(side='left', padx=10)
+        Button(button_frame, text="Cancel", command=dialog.destroy,
+               font=font.Font(size=16), bg='#999', fg='white',
+               width=12, height=2).pack(side='left', padx=10)
+
+        dialog.wait_window()
+
+        if result[0]:
+            # Re-lookup to get fresh, full reservation data (the equipment
+            # list endpoint doesn't include it, only the single-fob lookup does)
+            found, fob = self.lookup_api('fob', result[0]['fob_id'])
+            self.manage_reservation_mode = False
+            if not found or not fob:
+                self.show_error("Could not load that item's details")
+                return
+            self.process_manage_reservation_item(fob)
+        else:
+            self.cancel_manage_reservation()
+
+    def process_manage_reservation_item(self, fob):
+        """Show the item's active reservation (if any) with Edit/Cancel/Close options"""
+        from tkinter import Toplevel, Button, Label
+
+        reservation = fob.get('reservation')
+
+        if not reservation:
+            self.clear_message_frame()
+            tk.Label(self.message_frame, text="ℹ️", font=font.Font(size=120),
+                  fg='#666', bg='black').pack(pady=(50, 30))
+            tk.Label(self.message_frame, text=f"No active reservation for\n{fob['vehicle_name']}",
+                  font=self.header_font, fg='#666', bg='black', justify='center').pack()
+            self.instructions_label.config(text="")
+            self.root.after(3000, self.show_welcome)
+            return
+
+        reserved_for = ""
+        if reservation.get('first_name'):
+            reserved_for = f"{reservation['first_name']} {reservation['last_name']}"
+        elif reservation.get('reserved_for_name'):
+            reserved_for = reservation['reserved_for_name']
+
+        try:
+            res_dt = datetime.fromisoformat(reservation['reserved_datetime'])
+            formatted_time = res_dt.strftime('%a, %b %d at %I:%M %p')
+        except Exception:
+            formatted_time = str(reservation['reserved_datetime'])
+
+        action = [None]
+
+        def on_edit():
+            action[0] = 'edit'
+            dialog.destroy()
+
+        def on_cancel_res():
+            action[0] = 'cancel'
+            dialog.destroy()
+
+        def on_close():
+            dialog.destroy()
+
+        dialog = Toplevel(self.root)
+        dialog.title("Reservation Details")
+        dialog.geometry("700x600")
+        dialog.configure(bg='white')
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        Label(dialog, text="📅", font=font.Font(size=70),
+              bg='white', fg='#5C6BC0').pack(pady=(30, 10))
+        Label(dialog, text=fob['vehicle_name'],
+              font=font.Font(size=22, weight='bold'), bg='white').pack(pady=(0, 20))
+
+        info_text = f"Reserved For: {reserved_for or 'N/A'}\nTime: {formatted_time}"
+        if reservation.get('reason'):
+            info_text += f"\n\nReason: {reservation['reason']}"
+
+        Label(dialog, text=info_text, font=font.Font(size=16),
+              bg='white', wraplength=600, justify='center').pack(pady=(0, 30))
+
+        button_frame = tk.Frame(dialog, bg='white')
+        button_frame.pack(pady=20)
+
+        Button(button_frame, text="✏️ Edit", command=on_edit,
+               font=font.Font(size=16), bg='#5C6BC0', fg='white',
+               width=12, height=2).pack(side='left', padx=8)
+        Button(button_frame, text="🗑️ Cancel Reservation", command=on_cancel_res,
+               font=font.Font(size=16), bg='#f44336', fg='white',
+               width=18, height=2).pack(side='left', padx=8)
+        Button(button_frame, text="Close", command=on_close,
+               font=font.Font(size=16), bg='#666', fg='white',
+               width=10, height=2).pack(side='left', padx=8)
+
+        dialog.wait_window()
+
+        if action[0] == 'edit':
+            self.prompt_edit_reservation(fob, reservation)
+        elif action[0] == 'cancel':
+            self.confirm_cancel_reservation(fob, reservation)
+        else:
+            self.show_welcome()
+
+    def prompt_edit_reservation(self, fob, reservation):
+        """Show the same date/time/reason dialog used for creating a
+        reservation, pre-filled with the existing values, and submit an
+        update instead of a create."""
+        from tkinter import Toplevel, Label, Button, Entry, Text
+
+        result = {'submitted': False}
+        chicago_tz = pytz.timezone('America/Chicago')
+
+        def on_submit():
+            date_str = date_entry.get().strip()
+            time_str = time_entry.get().strip()
+            reserved_for = reserved_for_entry.get().strip()
+            reason_text = reason_text_widget.get("1.0", "end-1c").strip()
+
+            if not date_str or not time_str:
+                return
+
+            try:
+                dt = datetime.strptime(f"{date_str} {time_str}", '%m/%d/%Y %H:%M')
+                dt_aware = chicago_tz.localize(dt)
+            except Exception:
+                date_entry.config(bg='#ffcccc')
+                time_entry.config(bg='#ffcccc')
+                return
+
+            result['submitted'] = True
+            result['reserved_datetime'] = dt_aware.isoformat()
+            result['reserved_for'] = reserved_for
+            result['reason'] = reason_text
+            dialog.destroy()
+
+        def on_cancel():
+            dialog.destroy()
+
+        dialog = Toplevel(self.root)
+        dialog.title("Edit Reservation")
+        dialog.geometry("650x650")
+        dialog.configure(bg='white')
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        Label(dialog, text="✏️", font=font.Font(size=60),
+              bg='white', fg='#5C6BC0').pack(pady=(20, 10))
+        Label(dialog, text=f"Edit reservation for {fob['vehicle_name']}",
+              font=font.Font(size=18, weight='bold'), bg='white', wraplength=550, justify='center').pack(pady=(0, 20))
+
+        date_time_frame = tk.Frame(dialog, bg='white')
+        date_time_frame.pack(pady=10)
+
+        Label(date_time_frame, text="Date (MM/DD/YYYY):",
+              font=font.Font(size=13), bg='white').pack(side='left', padx=5)
+
+        try:
+            existing_dt = datetime.fromisoformat(reservation['reserved_datetime'])
+            if existing_dt.tzinfo is not None:
+                existing_dt = existing_dt.astimezone(chicago_tz)
+        except Exception:
+            existing_dt = datetime.now(chicago_tz) + timedelta(days=1)
+
+        date_entry = Entry(date_time_frame, font=font.Font(size=14), width=12)
+        date_entry.insert(0, existing_dt.strftime('%m/%d/%Y'))
+        date_entry.pack(side='left', padx=5)
+
+        Label(date_time_frame, text="Time (HH:MM):",
+              font=font.Font(size=13), bg='white').pack(side='left', padx=5)
+
+        time_entry = Entry(date_time_frame, font=font.Font(size=14), width=8)
+        time_entry.insert(0, existing_dt.strftime('%H:%M'))
+        time_entry.pack(side='left', padx=5)
+
+        Label(dialog, text="Reserved for:",
+              font=font.Font(size=13), bg='white').pack(pady=(20, 0))
+        reserved_for_entry = Entry(dialog, font=font.Font(size=16), width=30)
+        existing_for = ""
+        if reservation.get('first_name'):
+            existing_for = f"{reservation['first_name']} {reservation['last_name']}"
+        elif reservation.get('reserved_for_name'):
+            existing_for = reservation['reserved_for_name']
+        reserved_for_entry.insert(0, existing_for)
+        reserved_for_entry.pack(pady=(5, 10))
+
+        Label(dialog, text="Reason:",
+              font=font.Font(size=13), bg='white').pack(pady=(10, 0))
+        reason_text_widget = Text(dialog, font=font.Font(size=15), width=45, height=4,
+                                   wrap='word', bg='#f0f0f0')
+        reason_text_widget.insert("1.0", reservation.get('reason') or '')
+        reason_text_widget.pack(pady=10, padx=20)
+
+        button_frame = tk.Frame(dialog, bg='white')
+        button_frame.pack(pady=20)
+
+        Button(button_frame, text="Save Changes", command=on_submit,
+               font=font.Font(size=16), bg='#5C6BC0', fg='white',
+               width=16, height=2).pack(side='left', padx=10)
+        Button(button_frame, text="Cancel", command=on_cancel,
+               font=font.Font(size=16), bg='#666', fg='white',
+               width=12, height=2).pack(side='left', padx=10)
+
+        dialog.wait_window()
+
+        if not result.get('submitted'):
+            self.show_welcome()
+            return
+
+        success, error = self.update_reservation_api(
+            reservation['id'], result['reserved_datetime'],
+            reason=result['reason'],
+            reserved_for_name=result['reserved_for'] or None
+        )
+
+        if not success:
+            self.show_error(f"Failed to update reservation: {error}")
+            return
+
+        self.notify_server()
+        self.clear_message_frame()
+        tk.Label(self.message_frame, text="✅", font=font.Font(size=120),
+              fg='#4CAF50', bg='black').pack(pady=(50, 30))
+        tk.Label(self.message_frame, text=f"{fob['vehicle_name']}\nreservation updated!",
+              font=self.header_font, fg='#4CAF50', bg='black', justify='center').pack()
+        self.root.after(3000, self.show_welcome)
+
+    def confirm_cancel_reservation(self, fob, reservation):
+        """Confirm before permanently removing a reservation"""
+        from tkinter import Toplevel, Label, Button
+
+        result = [None]
+
+        def on_yes():
+            result[0] = True
+            dialog.destroy()
+
+        def on_no():
+            result[0] = False
+            dialog.destroy()
+
+        dialog = Toplevel(self.root)
+        dialog.title("Cancel Reservation")
+        dialog.geometry("650x350")
+        dialog.configure(bg='white')
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        Label(dialog, text="⚠️", font=font.Font(size=70),
+              bg='white', fg='#f44336').pack(pady=(20, 10))
+        Label(dialog, text=f"Cancel the reservation for\n{fob['vehicle_name']}?",
+              font=font.Font(size=18, weight='bold'), bg='white', justify='center').pack(pady=(0, 30))
+
+        button_frame = tk.Frame(dialog, bg='white')
+        button_frame.pack(pady=10)
+
+        Button(button_frame, text="Yes, Cancel It", command=on_yes,
+               font=font.Font(size=16), bg='#f44336', fg='white',
+               width=16, height=2).pack(side='left', padx=10)
+        Button(button_frame, text="No, Keep It", command=on_no,
+               font=font.Font(size=16), bg='#666', fg='white',
+               width=16, height=2).pack(side='left', padx=10)
+
+        dialog.wait_window()
+
+        if not result[0]:
+            self.show_welcome()
+            return
+
+        success, error = self.delete_reservation_api(reservation['id'])
+
+        if not success:
+            self.show_error(f"Failed to cancel reservation: {error}")
+            return
+
+        self.notify_server()
+        self.clear_message_frame()
+        tk.Label(self.message_frame, text="✅", font=font.Font(size=120),
+              fg='#4CAF50', bg='black').pack(pady=(50, 30))
+        tk.Label(self.message_frame, text=f"Reservation for\n{fob['vehicle_name']}\ncancelled",
               font=self.header_font, fg='#4CAF50', bg='black', justify='center').pack()
         self.root.after(3000, self.show_welcome)
 
