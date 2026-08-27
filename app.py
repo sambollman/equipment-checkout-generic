@@ -2151,7 +2151,6 @@ def add_stock_item():
     name = (request.form.get('name') or '').strip()
     item_type = request.form.get('item_type', 'stock_part')
     barcode = (request.form.get('barcode') or '').strip()
-    starting_qty = request.form.get('starting_qty', '0') or '0'
 
     if not name or item_type not in ('stock_part', 'key_blank'):
         return redirect(url_for('admin_dashboard') + '#Stock Items')
@@ -2181,15 +2180,10 @@ def add_stock_item():
             conn.close()
             return f"An item with barcode '{barcode}' already exists", 409
 
-    try:
-        qty = int(starting_qty)
-    except ValueError:
-        qty = 0
-
     conn.execute('''
         INSERT INTO stock_items (barcode, name, item_type, on_hand_qty, created_at)
         VALUES (?, ?, ?, ?, ?)
-    ''', (barcode, name, item_type, qty, datetime.now(pytz.timezone('America/Chicago')).isoformat()))
+    ''', (barcode, name, item_type, 0, datetime.now(pytz.timezone('America/Chicago')).isoformat()))
     conn.commit()
     conn.close()
 
