@@ -745,6 +745,36 @@
 
 <!-- Stock Items Catalog Tab Content -->
 <div class="tab-content" id="Stock Items-content">
+    <div style="padding: 15px; margin-bottom: 15px; border-radius: 5px; background: #F0F4FF;">
+        <form method="POST" action="/admin/stock-items/add" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: end;">
+            <div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Name:</label>
+                <input type="text" name="name" required placeholder="e.g. Kwikset KW1"
+                       style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Type:</label>
+                <select name="item_type" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="key_blank">Key Blank</option>
+                    <option value="stock_part">Stock Part</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Barcode (optional):</label>
+                <input type="text" name="barcode" placeholder="Leave blank to auto-generate"
+                       style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 220px;">
+            </div>
+            <div>
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Starting Qty:</label>
+                <input type="number" name="starting_qty" value="0" min="0"
+                       style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 80px;">
+            </div>
+            <div>
+                <button type="submit" style="background:#009688; color:white; padding: 9px 16px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">+ Add Item</button>
+            </div>
+        </form>
+        <p style="margin: 10px 0 0 0; font-size: 0.85em; color: #666;">Leave Barcode blank and the system will generate one - then use the QR Code button below to print a label for it.</p>
+    </div>
     <a href="/admin/export/stock-items" style="display:inline-block; margin-bottom:10px; padding:8px 16px; background:#009688; color:white; text-decoration:none; border-radius:4px;">⬇️ Export CSV</a>
     <div style="overflow-x: auto;">
         <table>

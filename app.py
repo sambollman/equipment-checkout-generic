@@ -2139,6 +2139,63 @@ def export_stock_log():
 
     return response
 
+@app.route('/admin/stock-items/add', methods=['POST'])
+def add_stock_item():
+    """Add a new stock item (or key blank) directly from the admin panel,
+    without needing to scan an unrecognized code at the kiosk first. If no
+    barcode is given, one is auto-generated so the item can be created and
+    have a QR code printed for it before it's ever physically scanned."""
+    if not session.get('admin'):
+        return redirect(url_for('admin_login'))
+
+    name = (request.form.get('name') or '').strip()
+    item_type = request.form.get('item_type', 'stock_part')
+    barcode = (request.form.get('barcode') or '').strip()
+    starting_qty = request.form.get('starting_qty', '0') or '0'
+
+    if not name or item_type not in ('stock_part', 'key_blank'):
+        return redirect(url_for('admin_dashboard') + '#Stock Items')
+
+    conn = get_db()
+
+    if not barcode:
+        # Auto-generate a short, readable, collision-safe barcode
+        import secrets
+        prefix = 'KB' if item_type == 'key_blank' else 'SP'
+        for _ in range(10):
+            candidate = f"{prefix}-{secrets.token_hex(3).upper()}"
+            exists = conn.execute(
+                'SELECT id FROM stock_items WHERE barcode = ? COLLATE NOCASE', (candidate,)
+            ).fetchone()
+            if not exists:
+                barcode = candidate
+                break
+        else:
+            conn.close()
+            return "Could not generate a unique barcode, please try again", 500
+    else:
+        existing = conn.execute(
+            'SELECT id FROM stock_items WHERE barcode = ? COLLATE NOCASE', (barcode,)
+        ).fetchone()
+        if existing:
+            conn.close()
+            return f"An item with barcode '{barcode}' already exists", 409
+
+    try:
+        qty = int(starting_qty)
+    except ValueError:
+        qty = 0
+
+    conn.execute('''
+        INSERT INTO stock_items (barcode, name, item_type, on_hand_qty, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (barcode, name, item_type, qty, datetime.now(pytz.timezone('America/Chicago')).isoformat()))
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for('admin_dashboard') + '#Stock Items')
+
+
 @app.route('/admin/export/stock-items')
 def export_stock_items():
     """Export the Stock Items Catalog (barcode, name, type, on-hand qty) as CSV"""
