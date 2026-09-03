@@ -727,6 +727,7 @@ class KioskGUI:
 
     def start_replace_card_mode(self):
         """Start the process to replace a lost/broken card"""
+        self.pending_fob = None
         # Ask for user's name or old card number
         search = self.get_text_input("Replace Lost Card\n\nEnter your last name or old card number:")
         if not search:
@@ -853,6 +854,7 @@ class KioskGUI:
 
     def start_replace_fob_mode(self):
         """Start the process to replace a lost/broken fob"""
+        self.pending_fob = None
         # Ask for vehicle/equipment name
         search = self.get_text_input("Replace Lost Fob\n\nEnter vehicle or equipment name:")
         if not search:
@@ -1072,6 +1074,7 @@ class KioskGUI:
         self.reservation_mode = False
         self.pending_reservation_fob = None
         self.manage_reservation_mode = False
+        self.pending_fob = None
     
         # Big icon/emoji
         icon_label = tk.Label(
@@ -1250,6 +1253,7 @@ class KioskGUI:
         """Start bulk checkout mode"""
         self.bulk_checkout_mode = True
         self.bulk_items = []
+        self.pending_fob = None
         self.clear_message_frame()
         
         icon_label = tk.Label(
@@ -1643,6 +1647,11 @@ class KioskGUI:
         self.stock_mode = mode
         self.stock_scanned_items = []
         self.current_user = None
+        # If a physical item was scanned by mistake at the welcome screen
+        # just before this (starting a normal single-item checkout), that
+        # intent is now stale - clear it so it can't silently complete
+        # itself against whoever scans their card next, after this session.
+        self.pending_fob = None
         self.clear_message_frame()
 
         icon, color, label = self.STOCK_MODE_LABELS[mode]
@@ -1932,6 +1941,7 @@ class KioskGUI:
     def start_add_new(self):
         """Start add new user/item mode"""
         self.add_new_mode = True
+        self.pending_fob = None
         self.clear_message_frame()
 
         tk.Label(self.message_frame, text="➕", font=font.Font(size=120),
@@ -2978,6 +2988,7 @@ class KioskGUI:
 
     def start_note_mode(self):
         """Start note addition mode - ask if they have the fob"""
+        self.pending_fob = None
         from tkinter import Toplevel, Button, Label
         
         result = [None]
@@ -3062,6 +3073,7 @@ class KioskGUI:
         Asks whether the tech has the item with them (scan) or needs to
         pick it from a list, then scans an employee card to log who made
         the reservation, then collects the date/time and reason."""
+        self.pending_fob = None
         from tkinter import Toplevel, Button, Label
 
         result = [None]
@@ -3327,6 +3339,7 @@ class KioskGUI:
         Same 'do you have it' pattern as Reserve, but no employee card scan
         needed since we're not creating a record attributing a new action -
         just changing/removing one that already exists."""
+        self.pending_fob = None
         from tkinter import Toplevel, Button, Label
 
         result = [None]
