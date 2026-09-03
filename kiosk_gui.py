@@ -2090,7 +2090,42 @@ class KioskGUI:
         
         # Return to welcome after 3 seconds
         self.root.after(3000, self.show_welcome)
-    
+
+    def show_stock_item_reminder(self, item):
+        """Shown when a Stock Part / Key Blank barcode gets scanned at the
+        main welcome screen instead of inside the correct mode. Steers the
+        tech to the right button rather than silently doing nothing useful
+        with the scan (or, before this existed, risking it being treated
+        as an unrecognized item to register as a regular checkout fob)."""
+        self.clear_message_frame()
+
+        if item.get('item_type') == 'key_blank':
+            icon, button_name, label = "✂️", "Cut Key", "Key Blank"
+        else:
+            icon, button_name, label = "📦", "Stock Parts Out / In", "Stock Part"
+
+        tk.Label(
+            self.message_frame, text=icon, font=font.Font(size=120),
+            fg='#FF9800', bg='black'
+        ).pack(pady=(50, 30))
+
+        tk.Label(
+            self.message_frame,
+            text=f"\"{item['name']}\" is a {label}",
+            font=self.header_font, fg='#FF9800', bg='black',
+            wraplength=800, justify='center'
+        ).pack(pady=(0, 20))
+
+        tk.Label(
+            self.message_frame,
+            text=f"Please use the \"{button_name}\" button on the\nmain screen, then scan this again",
+            font=self.body_font, fg='white', bg='black',
+            wraplength=800, justify='center'
+        ).pack()
+
+        self.instructions_label.config(text="")
+        self.root.after(4000, self.show_welcome)
+
     def show_scan_error(self, message, icon="❓", color="#666"):
         """Show a scan error WITHOUT ending a Bulk Checkout, Stock Parts/
         Cut Keys, or Reservation session - returns to whichever screen the
@@ -2203,6 +2238,10 @@ class KioskGUI:
             # API returns type in the response, but let's check the data structure
             if 'first_name' in data:  # It's a user
                 self.handle_card_scan(scan_data)
+            elif 'item_type' in data:  # It's a registered Stock Part / Key Blank -
+                # steer the tech to the right button instead of treating this
+                # as an unrecognized item to register as a checkout fob.
+                self.show_stock_item_reminder(data)
             else:  # It's a fob
                 self.handle_fob_scan(scan_data)
         elif self.add_new_mode:

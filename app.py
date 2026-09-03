@@ -772,6 +772,16 @@ def api_lookup():
             fob = conn.execute('''
                 SELECT * FROM key_fobs WHERE fob_id = ? COLLATE NOCASE
             ''', (identifier,)).fetchone()
+
+            stock_item = None
+            if not user and not fob:
+                # Not a card or a checkout item - check if it's actually a
+                # registered Stock Part / Key Blank, so the kiosk can steer
+                # the tech to the right button instead of treating it as an
+                # unrecognized scan.
+                stock_item = conn.execute('''
+                    SELECT * FROM stock_items WHERE barcode = ? COLLATE NOCASE AND is_active = 1
+                ''', (identifier,)).fetchone()
             
             conn.close()
             
@@ -779,6 +789,8 @@ def api_lookup():
                 return {'found': True, 'type': 'user', 'data': dict(user)}, 200
             elif fob:
                 return {'found': True, 'type': 'fob', 'data': dict(fob)}, 200
+            elif stock_item:
+                return {'found': True, 'type': 'stock_item', 'data': dict(stock_item)}, 200
             else:
                 return {'found': False}, 200
         
