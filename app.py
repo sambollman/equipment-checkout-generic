@@ -2296,7 +2296,8 @@ def generate_stock_item_qrcode(item_id):
 
 @app.route('/admin/stock-items/edit/<int:item_id>', methods=['GET', 'POST'])
 def edit_stock_item(item_id):
-    """Edit a stock item's name, barcode, or active status (e.g. UPC changed)"""
+    """Edit a stock item's name, barcode, active status, or on-hand quantity
+    (e.g. UPC changed, or a physical inventory count needs correcting)"""
     if not session.get('admin'):
         return redirect(url_for('admin_login'))
 
@@ -2306,12 +2307,17 @@ def edit_stock_item(item_id):
         name = (request.form.get('name') or '').strip()
         barcode = (request.form.get('barcode') or '').strip()
         is_active = 1 if request.form.get('is_active') else 0
+        on_hand_qty_raw = request.form.get('on_hand_qty', '0')
+        try:
+            on_hand_qty = max(0, int(on_hand_qty_raw))
+        except ValueError:
+            on_hand_qty = 0
 
         if name and barcode:
             try:
                 conn.execute(
-                    'UPDATE stock_items SET name = ?, barcode = ?, is_active = ? WHERE id = ?',
-                    (name, barcode, is_active, item_id)
+                    'UPDATE stock_items SET name = ?, barcode = ?, is_active = ?, on_hand_qty = ? WHERE id = ?',
+                    (name, barcode, is_active, on_hand_qty, item_id)
                 )
                 conn.commit()
             except Exception:

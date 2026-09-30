@@ -26,6 +26,9 @@
             <label>Barcode / UPC:</label>
             <input type="text" name="barcode" value="{{ item.barcode }}" required>
 
+            <label>On Hand Qty:</label>
+            <input type="number" name="on_hand_qty" value="{{ item.on_hand_qty }}" min="0" required>
+
             <div class="checkbox-row">
                 <input type="checkbox" name="is_active" id="is_active" {% if item.is_active %}checked{% endif %}>
                 <label for="is_active">Active (visible/scannable at the kiosk)</label>
