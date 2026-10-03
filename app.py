@@ -1131,10 +1131,11 @@ def api_stock_movement():
         return {'error': 'Missing user_id, mode, or items'}, 400
     if mode not in VALID_STOCK_MODES:
         return {'error': f'mode must be one of {VALID_STOCK_MODES}'}, 400
-    # Property/location only makes sense for items leaving the shop
-    # (stock_parts_out, cut_key). Stock Parts In is just "this came back to
-    # the shelf" - no destination to record.
-    if mode != 'stock_parts_in' and not property_note:
+    # Property is required for every mode: for items leaving the shop
+    # (stock_parts_out, cut_key) it's where they're going; for Stock Parts
+    # In it's which property's leftover item is coming back, so a
+    # discrepancy at that property can be traced to this return.
+    if not property_note:
         return {'error': 'property_note is required'}, 400
 
     chicago_tz = pytz.timezone('America/Chicago')

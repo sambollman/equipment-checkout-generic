@@ -1860,18 +1860,19 @@ class KioskGUI:
 
         icon, color, label = self.STOCK_MODE_LABELS[self.stock_mode]
 
-        # Stock Parts In is just "this came back to the shelf" - no
-        # destination to record, so skip the property prompt entirely.
+        # Property is required for every mode. For Stock Parts In, this
+        # records which property's leftover item is coming back - helpful
+        # for tracing a discrepancy if a job used fewer parts than expected.
         if self.stock_mode == 'stock_parts_in':
-            property_note = ''
+            prompt_text = "Which property is this returning from?\n(the one that didn't use it)"
         else:
-            property_note = self.prompt_property_note_generic(
-                "Which property is this for?"
-            )
-            if not property_note:
-                # Cancelled - stay on the scanning screen rather than losing the list
-                self.show_stock_scanning()
-                return
+            prompt_text = "Which property is this for?"
+
+        property_note = self.prompt_property_note_generic(prompt_text)
+        if not property_note:
+            # Cancelled - stay on the scanning screen rather than losing the list
+            self.show_stock_scanning()
+            return
 
         items_payload = [{'barcode': i['barcode'], 'quantity': i['quantity']} for i in self.stock_scanned_items]
 
