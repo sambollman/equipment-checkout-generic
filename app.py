@@ -98,7 +98,8 @@ def index():
             u.last_name,
             c.checked_out_at,
             c.id as checkout_id,
-            c.property_note
+            c.property_note,
+            c.vendor_name
         FROM key_fobs kf
         LEFT JOIN checkouts c ON kf.id = c.fob_id AND c.checked_in_at IS NULL
         LEFT JOIN users u ON c.user_id = u.id
@@ -278,7 +279,8 @@ def get_current_status():
             u.last_name,
             c.checked_out_at,
             c.id as checkout_id,
-            c.property_note
+            c.property_note,
+            c.vendor_name
         FROM key_fobs kf
         LEFT JOIN checkouts c ON kf.id = c.fob_id AND c.checked_in_at IS NULL
         LEFT JOIN users u ON c.user_id = u.id
@@ -957,6 +959,8 @@ def api_bulk_checkout():
     # Optional: {fob_id: property_note} for items that require one (Rentables/Lock Box)
     property_notes = data.get('property_notes', {})
     kiosk_id = data.get('kiosk_id', 'station')
+    # Optional: vendor taking the item(s) (staff member stays the accountable user)
+    vendor_name = (data.get('vendor_name') or '').strip() or None
     
     if not user_id or not fob_ids:
         return {'error': 'Missing user_id or fob_ids'}, 400
@@ -993,17 +997,17 @@ def api_bulk_checkout():
                         ''', (datetime.now(chicago_tz).isoformat(), existing['id']))
                         # Check out to new user
                         conn.execute('''
-                            INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at, property_note)
-                            VALUES (?, ?, ?, ?, ?)
-                        ''', (user_id, fob_id, kiosk_id, datetime.now(chicago_tz).isoformat(), note))
+                            INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at, property_note, vendor_name)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        ''', (user_id, fob_id, kiosk_id, datetime.now(chicago_tz).isoformat(), note, vendor_name))
                         checked_out.append(fob_id)
                     # else: already checked out to this user, skip
                 else:
                     # Normal checkout
                     conn.execute('''
-                        INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at, property_note)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', (user_id, fob_id, kiosk_id, datetime.now(chicago_tz).isoformat(), note))
+                        INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at, property_note, vendor_name)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (user_id, fob_id, kiosk_id, datetime.now(chicago_tz).isoformat(), note, vendor_name))
                     checked_out.append(fob_id)
                     
             except Exception as e:
@@ -1606,7 +1610,8 @@ def admin_dashboard():
             c.checked_out_at,
             c.checked_in_at,
             c.kiosk_id,
-            c.property_note
+            c.property_note,
+            c.vendor_name
         FROM checkouts c
         JOIN users u ON c.user_id = u.id
         JOIN key_fobs kf ON c.fob_id = kf.id
@@ -1976,7 +1981,8 @@ def export_history():
             c.checked_out_at,
             c.checked_in_at,
             c.kiosk_id,
-            c.property_note
+            c.property_note,
+            c.vendor_name
         FROM checkouts c
         JOIN users u ON c.user_id = u.id
         JOIN key_fobs kf ON c.fob_id = kf.id
@@ -2025,7 +2031,7 @@ def export_history():
     
     # Build CSV
     csv_lines = []
-    csv_lines.append("User Name,Card ID,Vehicle,Fob ID,Checked Out,Checked In,Duration (minutes),Kiosk")
+    csv_lines.append("User Name,Card ID,Vehicle,Fob ID,Checked Out,Checked In,Duration (minutes),Kiosk,Property,Vendor")
     
     
     chicago_tz = pytz.timezone('America/Chicago')
@@ -2060,7 +2066,7 @@ def export_history():
             checked_in = 'Still out'
             duration = ''
         
-        csv_lines.append(f'"{entry["user_name"]}","{entry["card_id"]}","{entry["vehicle_name"]}","{entry["fob_id"]}","{checked_out}","{checked_in}","{duration}","{entry["kiosk_id"]}"')
+        csv_lines.append(f'"{entry["user_name"]}","{entry["card_id"]}","{entry["vehicle_name"]}","{entry["fob_id"]}","{checked_out}","{checked_in}","{duration}","{entry["kiosk_id"]}","{entry["property_note"] or ""}","{entry["vendor_name"] or ""}"')
     
     csv_content = '\n'.join(csv_lines)
     

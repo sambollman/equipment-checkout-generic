@@ -606,7 +606,7 @@
                     {% endif %}
                 </td>
                 <td>{{ entry.kiosk_id }}</td>
-                <td>{{ entry.property_note or '' }}</td>
+                <td>{{ entry.property_note or '' }}{% if entry.vendor_name %}{% if entry.property_note %}<br>{% endif %}🔧 Vendor: {{ entry.vendor_name }}{% endif %}</td>
             </tr>
             {% endfor %}
         </table>

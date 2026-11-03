@@ -50,6 +50,7 @@ def init_db():
             checked_in_at TIMESTAMP NULL,
             kiosk_id TEXT DEFAULT 'kiosk1',
             property_note TEXT NULL,
+            vendor_name TEXT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id),
             FOREIGN KEY (fob_id) REFERENCES key_fobs(id)
         )
@@ -164,6 +165,11 @@ def migrate_db():
         if not _column_exists(conn, 'checkouts', 'property_note'):
             conn.execute('ALTER TABLE checkouts ADD COLUMN property_note TEXT NULL')
             print("Migration: added checkouts.property_note")
+
+        # checkouts.vendor_name - set when staff check out key-box fobs for a vendor.
+        if not _column_exists(conn, 'checkouts', 'vendor_name'):
+            conn.execute('ALTER TABLE checkouts ADD COLUMN vendor_name TEXT NULL')
+            print("Migration: added checkouts.vendor_name")
 
         # New tables for Stock Parts / Cut Keys - safe no-op if they already exist.
         conn.execute('''

@@ -30,6 +30,7 @@ class KioskGUI:
         self.replace_item = None # The item being replaced
         self.note_mode = False
         self.bulk_checkout_mode = False
+        self.vendor_mode = False
         self.bulk_items = []
         self.add_new_mode = False
 
@@ -109,6 +110,7 @@ class KioskGUI:
         self.current_user = None
         self.pending_fob = None
         self.bulk_checkout_mode = False
+        self.vendor_mode = False
         self.bulk_items = []
         self.add_new_mode = False
         self.replace_mode = None
@@ -249,7 +251,7 @@ class KioskGUI:
                     return False, None
                 return False, str(e)
 
-    def bulk_checkout_api(self, user_id, fob_ids, property_notes=None):
+    def bulk_checkout_api(self, user_id, fob_ids, property_notes=None, vendor_name=None):
         """Bulk checkout multiple items via API"""
         try:
             payload = {
@@ -259,6 +261,8 @@ class KioskGUI:
             }
             if property_notes:
                 payload['property_notes'] = property_notes
+            if vendor_name:
+                payload['vendor_name'] = vendor_name
             response = requests.post(
                 f'{SERVER_URL}/api/bulk_checkout',
                 auth=(KIOSK_USER, KIOSK_PASS),
@@ -1065,6 +1069,7 @@ class KioskGUI:
         self.clear_message_frame()
         self.current_user = None
         self.bulk_checkout_mode = False
+        self.vendor_mode = False
         self.bulk_items = []
         self.add_new_mode = False
         self.stock_mode = None
@@ -1097,10 +1102,10 @@ class KioskGUI:
         button_frame1 = tk.Frame(self.message_frame, bg='black')
         button_frame1.pack(pady=10)
     
-        # Bulk Checkout button
+        # Checkout button (multi-item checkout flow)
         bulk_btn = tk.Button(
             button_frame1,
-            text="🛒 Bulk Checkout",
+            text="🛒 Checkout",
             font=font.Font(size=16, weight='bold'),
             bg='#4CAF50',
             fg='white',
@@ -1109,6 +1114,19 @@ class KioskGUI:
             command=self.start_bulk_checkout
         )
         bulk_btn.pack(side='left', padx=10)
+
+        # Vendor Checkout button - staff checks out blue key-box fobs on behalf of a vendor
+        vendor_btn = tk.Button(
+            button_frame1,
+            text="🔧 Vendor Checkout",
+            font=font.Font(size=16, weight='bold'),
+            bg='#FF9800',
+            fg='white',
+            width=18,
+            height=2,
+            command=self.start_vendor_checkout
+        )
+        vendor_btn.pack(side='left', padx=10)
 
         # Button container - Second row
         button_frame2 = tk.Frame(self.message_frame, bg='black')
@@ -1246,9 +1264,16 @@ class KioskGUI:
         self.instructions_label.config(text="Press ESC to reset • F11/F12 for fullscreen")
         
     
-    def start_bulk_checkout(self):
-        """Start bulk checkout mode"""
+    def start_vendor_checkout(self):
+        """Start Vendor Checkout: same scan flow as Checkout, but the checkout
+        is recorded under the staff member with a vendor name attached."""
+        self.start_bulk_checkout(vendor=True)
+
+    def start_bulk_checkout(self, vendor=False):
+        """Start Checkout mode (multi-item). vendor=True -> Vendor Checkout."""
+        self.pending_fob = None
         self.bulk_checkout_mode = True
+        self.vendor_mode = vendor
         self.bulk_items = []
         self.clear_message_frame()
         
@@ -1263,7 +1288,7 @@ class KioskGUI:
         
         msg_label = tk.Label(
             self.message_frame,
-            text="Bulk Checkout Mode\n\nScan your keycard or first item",
+            text=("Vendor Checkout\n\nScan YOUR keycard first" if self.vendor_mode else "Checkout\n\nScan your keycard or first item"),
             font=self.header_font,
             fg='#4CAF50',
             bg='black',
@@ -1293,9 +1318,9 @@ class KioskGUI:
         
         # Header
         if self.current_user:
-            header_text = f"🛒 Bulk Checkout - {self.current_user['first_name']} {self.current_user['last_name']}"
+            header_text = f"{'🔧 Vendor Checkout' if self.vendor_mode else '🛒 Checkout'} - {self.current_user['first_name']} {self.current_user['last_name']}"
         else:
-            header_text = "🛒 Bulk Checkout"
+            header_text = "🔧 Vendor Checkout" if self.vendor_mode else "🛒 Checkout"
 
         header_label = tk.Label(
             self.message_frame,
@@ -1307,7 +1332,7 @@ class KioskGUI:
         header_label.pack(pady=(20, 10))
         
         if self.current_user:
-            instruction_text = f"Scan items for {self.current_user['first_name']} {self.current_user['last_name']}"
+            instruction_text = "Scan the key-box fob(s) the vendor is taking" if self.vendor_mode else f"Scan items for {self.current_user['first_name']} {self.current_user['last_name']}"
         else:
             instruction_text = "Scan items and your keycard"
         instruction_label = tk.Label(
@@ -1546,7 +1571,17 @@ class KioskGUI:
         # ask for it ONCE and apply that same property to all of them - not a
         # separate prompt per item.
         property_notes = None
-        items_needing_property = [fob for fob in items_to_checkout
+        vendor_name = None
+        was_vendor = self.vendor_mode
+        if self.vendor_mode:
+            # Vendor name asked ONCE for the whole batch; required.
+            vendor_name = (self.get_text_input("Vendor name\n(who is taking the key(s)?)", title="Vendor Checkout") or '').strip()
+            self.last_scan_time = datetime.now()
+            if not vendor_name:
+                # Cancelled/blank - stay on the scanning screen so nothing is lost
+                self.show_bulk_scanning()
+                return
+        items_needing_property = [] if self.vendor_mode else [fob for fob in items_to_checkout
                                    if fob.get('category') in self.PROPERTY_NOTE_CATEGORIES]
         if items_needing_property:
             note = self.prompt_property_note_generic("Which property is this batch going to?")
@@ -1556,10 +1591,10 @@ class KioskGUI:
                 return
             property_notes = {str(fob['id']): note for fob in items_needing_property}
 
-        success, result = self.bulk_checkout_api(self.current_user['id'], fob_ids, property_notes=property_notes)
+        success, result = self.bulk_checkout_api(self.current_user['id'], fob_ids, property_notes=property_notes, vendor_name=vendor_name)
 
         if not success:
-            self.show_error(f"Bulk checkout failed: {result}")
+            self.show_error(f"Checkout failed: {result}")
             return
         
         # Get results
@@ -1582,7 +1617,7 @@ class KioskGUI:
         tk.Label(self.message_frame, text="✅", font=font.Font(size=100), 
               fg='#4CAF50', bg='black').pack(pady=(30, 20))
         
-        tk.Label(self.message_frame, text=f"Bulk Checkout Complete!", 
+        tk.Label(self.message_frame, text=("Vendor Checkout Complete!" if was_vendor else "Checkout Complete!"), 
               font=self.header_font, fg='#4CAF50', bg='black').pack(pady=(0, 20))
         
         tk.Label(self.message_frame, text=f"{len(checked_out_items)} item(s) checked out", 
@@ -1608,6 +1643,7 @@ class KioskGUI:
         
         # Reset and return to welcome
         self.bulk_checkout_mode = False
+        self.vendor_mode = False
         self.bulk_items = []
         self.add_new_mode = False
         self.current_user = None
@@ -1616,6 +1652,7 @@ class KioskGUI:
     def cancel_bulk_checkout(self):
         """Cancel bulk checkout and return to welcome"""
         self.bulk_checkout_mode = False
+        self.vendor_mode = False
         self.bulk_items = []
         self.add_new_mode = False
         self.current_user = None

@@ -410,7 +410,7 @@ body {
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
-                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}
+                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}{% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -511,7 +511,7 @@ body {
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
-                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}
+                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}{% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -562,7 +562,7 @@ body {
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
-                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}
+                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}{% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -613,7 +613,7 @@ body {
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
-                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}
+                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}{% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -1018,6 +1018,7 @@ body {
                             ${key.first_name} ${key.last_name}<br>
                             <small>Since ${key.checked_out_at}</small>
                             ${key.property_note ? `<br><small>📍 ${key.property_note}</small>` : ''}
+                            ${key.vendor_name ? `<br><small>🔧 Vendor: ${key.vendor_name}</small>` : ''}
                         </div>
                     ` : `
                         <div class="status available">
