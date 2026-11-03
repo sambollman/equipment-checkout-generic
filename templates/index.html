@@ -461,6 +461,7 @@ body {
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
+                    {% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -664,6 +665,7 @@ body {
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
+                    {% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -714,6 +716,7 @@ body {
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
+                    {% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -764,6 +767,7 @@ body {
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
+                    {% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -814,6 +818,7 @@ body {
                     <strong>Checked out to:</strong><br>
                     <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
                     <small>Since {{ key.checked_out_at }}</small>
+                    {% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
