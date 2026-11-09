@@ -16,6 +16,9 @@ migrate_db()
 # Categories that require a free-text "which property is this for" note at
 # checkout time. Rentables + Lock Box both get physically carried to and left
 # at a property, so we capture where they went.
+# Categories where one fob can be held by several people at once (e.g. two
+# vendors with keys to the same property drawer)
+MULTI_HOLDER_CATEGORIES = ('Keys',)
 PROPERTY_NOTE_REQUIRED_CATEGORIES = ('Rentables', 'Lock Box', 'Signs')
 
 # Kiosk authentication (HTTP Basic Auth)
@@ -80,6 +83,35 @@ def compact_database():
     print("Database compacted successfully")
 
 
+
+def collapse_holders(rows):
+    """The dashboard query LEFT JOINs open checkouts, so a fob with several
+    holders (Keys can have more than one vendor at once) comes back as several
+    rows. Collapse to one dict per fob: the first (oldest) holder fills the
+    usual fields, and 'holders' lists everyone currently holding it."""
+    by_fob = {}
+    order = []
+    for r in rows:
+        d = dict(r)
+        holder = None
+        if d.get('checkout_id'):
+            holder = {
+                'checkout_id': d['checkout_id'],
+                'first_name': d.get('first_name'),
+                'last_name': d.get('last_name'),
+                'checked_out_at': d.get('checked_out_at'),
+                'property_note': d.get('property_note'),
+                'vendor_name': d.get('vendor_name'),
+            }
+        if d['id'] not in by_fob:
+            d['holders'] = [holder] if holder else []
+            by_fob[d['id']] = d
+            order.append(d['id'])
+        elif holder:
+            by_fob[d['id']]['holders'].append(holder)
+    return [by_fob[i] for i in order]
+
+
 @app.route('/')
 @require_dashboard_auth
 def index():
@@ -104,10 +136,10 @@ def index():
         LEFT JOIN checkouts c ON kf.id = c.fob_id AND c.checked_in_at IS NULL
         LEFT JOIN users u ON c.user_id = u.id
         WHERE kf.is_active = 1
-        ORDER BY kf.category, kf.vehicle_name
+        ORDER BY kf.category, kf.vehicle_name, c.checked_out_at, c.id
     '''
     
-    all_keys = conn.execute(query).fetchall()
+    all_keys = collapse_holders(conn.execute(query).fetchall())
 
     # Get active reservations (moved up to get chicago_tz)
     chicago_tz = pytz.timezone('America/Chicago')
@@ -184,6 +216,12 @@ def index():
     
     for key in all_keys:
         key_dict = dict(key)
+        for h in key_dict.get('holders', []):
+            if h.get('checked_out_at'):
+                hdt = datetime.fromisoformat(h['checked_out_at'])
+                if hdt.tzinfo is None:
+                    hdt = pytz.UTC.localize(hdt)
+                h['checked_out_at'] = hdt.astimezone(chicago_tz).strftime('%b %d, %Y %H:%M')
         if key_dict['checked_out_at']:
             # Parse the timestamp and convert to Chicago time
             dt = datetime.fromisoformat(key_dict['checked_out_at'])
@@ -285,10 +323,10 @@ def get_current_status():
         LEFT JOIN checkouts c ON kf.id = c.fob_id AND c.checked_in_at IS NULL
         LEFT JOIN users u ON c.user_id = u.id
         WHERE kf.is_active = 1
-        ORDER BY kf.category, kf.vehicle_name
+        ORDER BY kf.category, kf.vehicle_name, c.checked_out_at, c.id
     '''
     
-    all_keys = conn.execute(query).fetchall()
+    all_keys = collapse_holders(conn.execute(query).fetchall())
     
     chicago_tz = pytz.timezone('America/Chicago')
     now = datetime.now(chicago_tz)
@@ -353,6 +391,12 @@ def get_current_status():
     
     for key in all_keys:
         key_dict = dict(key)
+        for h in key_dict.get('holders', []):
+            if h.get('checked_out_at'):
+                hdt = datetime.fromisoformat(h['checked_out_at'])
+                if hdt.tzinfo is None:
+                    hdt = pytz.UTC.localize(hdt)
+                h['checked_out_at'] = hdt.astimezone(chicago_tz).strftime('%b %d, %Y %H:%M')
         if key_dict['checked_out_at']:
             dt = datetime.fromisoformat(key_dict['checked_out_at'])
             if dt.tzinfo is None:
@@ -603,6 +647,7 @@ def api_checkout():
     user_id = data.get('user_id')
     fob_id = data.get('fob_id')
     property_note = (data.get('property_note') or '').strip() or None
+    vendor_name = (data.get('vendor_name') or '').strip() or None
     
     if not user_id or not fob_id:
         return {'error': 'Missing user_id or fob_id'}, 400
@@ -620,9 +665,9 @@ def api_checkout():
 
         # Insert checkout
         conn.execute('''
-            INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at, property_note)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, fob_id, data.get('kiosk_id', 'station'), datetime.now(chicago_tz).isoformat(), property_note))
+            INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at, property_note, vendor_name)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, fob_id, data.get('kiosk_id', 'station'), datetime.now(chicago_tz).isoformat(), property_note, vendor_name))
         conn.commit()
         conn.close()
         
@@ -656,12 +701,23 @@ def api_checkin():
             conn.close()
             return {'error': 'Fob not found'}, 404
         
-        # Update the active checkout
-        conn.execute('''
-            UPDATE checkouts
-            SET checked_in_at = ?
-            WHERE fob_id = ? AND checked_in_at IS NULL
-        ''', (datetime.now(chicago_tz).isoformat(), fob['id']))
+        # Update the active checkout(s). With checkout_id, only that one holder
+        # returns it (Keys can have several holders); without it, every open
+        # checkout on the fob is closed ("return all").
+        now_iso = datetime.now(chicago_tz).isoformat()
+        checkout_id = data.get('checkout_id')
+        if checkout_id:
+            conn.execute('''
+                UPDATE checkouts
+                SET checked_in_at = ?
+                WHERE id = ? AND fob_id = ? AND checked_in_at IS NULL
+            ''', (now_iso, checkout_id, fob['id']))
+        else:
+            conn.execute('''
+                UPDATE checkouts
+                SET checked_in_at = ?
+                WHERE fob_id = ? AND checked_in_at IS NULL
+            ''', (now_iso, fob['id']))
         conn.commit()
         conn.close()
         
@@ -704,14 +760,27 @@ def api_lookup():
                 
         elif lookup_type == 'fob':
             # Look up equipment by fob_id with checkout status
-            result = conn.execute('''
+            rows = conn.execute('''
                 SELECT kf.*, c.id as checkout_id, c.checked_out_at, 
+                       c.vendor_name, c.property_note,
                        u.first_name, u.last_name, u.id as user_id
                 FROM key_fobs kf
                 LEFT JOIN checkouts c ON kf.id = c.fob_id AND c.checked_in_at IS NULL
                 LEFT JOIN users u ON c.user_id = u.id
                 WHERE kf.fob_id = ? COLLATE NOCASE AND kf.is_active = 1
-            ''', (identifier,)).fetchone()
+                ORDER BY c.checked_out_at, c.id
+            ''', (identifier,)).fetchall()
+            result = rows[0] if rows else None
+            # Everyone currently holding this fob (Keys can have several)
+            holders = [{
+                'checkout_id': r['checkout_id'],
+                'user_id': r['user_id'],
+                'first_name': r['first_name'],
+                'last_name': r['last_name'],
+                'vendor_name': r['vendor_name'],
+                'property_note': r['property_note'],
+                'checked_out_at': r['checked_out_at'],
+            } for r in rows if r['checkout_id']]
             
             # Get note if exists
             note = None
@@ -761,6 +830,7 @@ def api_lookup():
                 fob_dict = dict(result)
                 fob_dict['note'] = note
                 fob_dict['reservation'] = reservation
+                fob_dict['holders'] = holders
                 return {'found': True, 'type': 'fob', 'data': fob_dict}, 200
             else:
                 return {'found': False}, 200
@@ -845,7 +915,7 @@ def api_list_equipment():
         ''').fetchall()
         conn.close()
         
-        equipment_list = [dict(item) for item in equipment]
+        equipment_list = collapse_holders(equipment)
         return {'equipment': equipment_list}, 200
         
     except Exception as e:
@@ -975,31 +1045,46 @@ def api_bulk_checkout():
         for fob_id in fob_ids:
             try:
                 fob = conn.execute('SELECT category FROM key_fobs WHERE id = ?', (fob_id,)).fetchone()
+                is_keys = bool(fob and fob['category'] in MULTI_HOLDER_CATEGORIES)
                 note = (property_notes.get(str(fob_id)) or property_notes.get(fob_id) or '').strip() or None
                 if fob and fob['category'] in PROPERTY_NOTE_REQUIRED_CATEGORIES and not note:
                     errors.append({'fob_id': fob_id, 'error': 'property_note is required for this category'})
                     continue
 
                 # Check if already checked out
-                existing = conn.execute('''
+                existing_rows = conn.execute('''
                     SELECT c.*, u.id as user_id
                     FROM checkouts c
                     JOIN users u ON c.user_id = u.id
                     WHERE c.fob_id = ? AND c.checked_in_at IS NULL
-                ''', (fob_id,)).fetchone()
+                ''', (fob_id,)).fetchall()
+                existing = existing_rows[0] if existing_rows else None
+                now_iso = datetime.now(chicago_tz).isoformat()
                 
-                if existing:
+                if existing and is_keys:
+                    # Keys: several holders (e.g. different vendors) may hold the
+                    # same drawer fob at once, so ADD a holder. Skip only an exact
+                    # repeat (same staff member, same vendor).
+                    if any(r['user_id'] == user_id and (r['vendor_name'] or None) == vendor_name for r in existing_rows):
+                        pass
+                    else:
+                        conn.execute('''
+                            INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at, property_note, vendor_name)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        ''', (user_id, fob_id, kiosk_id, now_iso, note, vendor_name))
+                        checked_out.append(fob_id)
+                elif existing:
                     # Handoff transfer
                     if existing['user_id'] != user_id:
                         # Check in from previous user
                         conn.execute('''
                             UPDATE checkouts SET checked_in_at = ? WHERE id = ?
-                        ''', (datetime.now(chicago_tz).isoformat(), existing['id']))
+                        ''', (now_iso, existing['id']))
                         # Check out to new user
                         conn.execute('''
                             INSERT INTO checkouts (user_id, fob_id, kiosk_id, checked_out_at, property_note, vendor_name)
                             VALUES (?, ?, ?, ?, ?, ?)
-                        ''', (user_id, fob_id, kiosk_id, datetime.now(chicago_tz).isoformat(), note, vendor_name))
+                        ''', (user_id, fob_id, kiosk_id, now_iso, note, vendor_name))
                         checked_out.append(fob_id)
                     # else: already checked out to this user, skip
                 else:

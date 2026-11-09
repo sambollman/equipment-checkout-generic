@@ -32,6 +32,7 @@ class KioskGUI:
         self.bulk_checkout_mode = False
         self.vendor_mode = False
         self.more_frame = None
+        self.returning_token = None
         self.bulk_items = []
         self.add_new_mode = False
 
@@ -230,15 +231,17 @@ class KioskGUI:
                     return False, None
                 return False, str(e)
     
-    def checkin_api(self, fob_id):
-            """Check in via API"""
+    def checkin_api(self, fob_id, checkout_id=None):
+            """Check in via API. With checkout_id only that holder returns the
+            fob; without it every open checkout on the fob is closed."""
             try:
+                payload = {'fob_id': fob_id}
+                if checkout_id:
+                    payload['checkout_id'] = checkout_id
                 response = requests.post(
                     f'{SERVER_URL}/api/checkin',
                     auth=(KIOSK_USER, KIOSK_PASS),
-                    json={
-                        'fob_id': fob_id
-                    },
+                    json=payload,
                     timeout=5
                 )
                 if response.status_code == 200:
@@ -695,6 +698,9 @@ class KioskGUI:
     # Categories where an item physically leaves and gets left at a property -
     # we require a free-text note of which property it's going to.
     PROPERTY_NOTE_CATEGORIES = ('Rentables', 'Lock Box', 'Signs')
+    # Categories where one fob can have several holders at once (e.g. two vendors
+    # with keys to the same property drawer)
+    MULTI_HOLDER_CATEGORIES = ('Keys',)
 
     def prompt_property_note(self, item_label):
         """Show a REQUIRED text prompt for which property an item is going to.
@@ -1234,8 +1240,20 @@ class KioskGUI:
         shown_frame = frame
         def back_if_idle():
             try:
-                if self.more_frame is shown_frame and shown_frame.winfo_exists():
-                    self.show_welcome()
+                if not (self.more_frame is shown_frame and shown_frame.winfo_exists()):
+                    return  # already left this page
+                # Don't yank the screen away while a pop-up is open or a flow
+                # (note, reservation, add new, ...) is in progress - look again soon.
+                popup_open = any(w.winfo_class() == 'Toplevel' for w in self.root.winfo_children())
+                flow_active = bool(
+                    self.current_user or self.note_mode or self.pending_fob or self.stock_mode
+                    or self.reservation_mode or self.manage_reservation_mode
+                    or self.bulk_checkout_mode or self.add_new_mode or self.replace_mode
+                )
+                if popup_open or flow_active:
+                    self.root.after(15000, back_if_idle)
+                    return
+                self.show_welcome()
             except Exception:
                 pass
         self.root.after(60000, back_if_idle)
@@ -1290,6 +1308,9 @@ class KioskGUI:
 
     def show_bulk_scanning(self):
         """Show bulk scanning screen with item list"""
+        if not self.bulk_checkout_mode:
+            # A delayed callback fired after the checkout ended/was cancelled
+            return
         self.clear_message_frame()
         
         # Header
@@ -1703,6 +1724,9 @@ class KioskGUI:
 
     def show_stock_scanning(self):
         """Show the scan-items screen for the current stock mode, with running list"""
+        if not self.stock_mode:
+            # A delayed callback fired after the session ended/timed out - nothing to show
+            return
         self.clear_message_frame()
         icon, color, label = self.STOCK_MODE_LABELS[self.stock_mode]
 
@@ -2546,6 +2570,91 @@ class KioskGUI:
         self.show_user_greeting(user)
 
 
+    @staticmethod
+    def holder_label(h):
+        """Short name for a holder: 'Acme Plumbing (via Dan Smith)' or 'Dan Smith'"""
+        person = f"{h.get('first_name') or ''} {h.get('last_name') or ''}".strip()
+        if h.get('vendor_name'):
+            return f"{h['vendor_name']} (via {person})"
+        return person
+
+    def handle_multi_holder_scan(self, fob):
+        """A Keys fob that is already out was scanned. Add a holder, check one
+        in, or ask who is returning when it is ambiguous."""
+        holders = fob['holders']
+        mine = [h for h in holders if self.current_user and h.get('user_id') == self.current_user['id']]
+
+        if self.current_user and not mine:
+            # Someone else has it, but several people may hold these keys: add a holder
+            success, error = self.checkout_api(self.current_user['id'], fob['id'])
+            if not success:
+                self.show_error(f"Checkout failed: {error}")
+                return
+            self.notify_server()
+            self.show_checkout_success(fob['vehicle_name'], fob['category'])
+            return
+
+        candidates = mine if mine else holders
+        if len(candidates) == 1:
+            h = candidates[0]
+            success, error = self.checkin_api(fob['fob_id'], checkout_id=h['checkout_id'])
+            if not success:
+                self.show_error(f"Check-in failed: {error}")
+                return
+            self.notify_server()
+            self.show_checkin_success(fob['vehicle_name'], self.holder_label(h))
+            self.current_user = None
+            return
+
+        self.show_returning_chooser(fob, candidates)
+
+    def show_returning_chooser(self, fob, candidates):
+        """'Who's returning?' list for a fob with more than one holder"""
+        self.clear_message_frame()
+        token = object()
+        self.returning_token = token
+
+        tk.Label(self.message_frame, text="🔑", font=font.Font(size=60),
+                 fg='#4CAF50', bg='black').pack(pady=(20, 5))
+        tk.Label(self.message_frame, text=f"Who is returning {fob['vehicle_name']}?",
+                 font=self.header_font, fg='white', bg='black', wraplength=900,
+                 justify='center').pack(pady=(0, 15))
+
+        def finish(checkout_id, label):
+            if self.returning_token is not token:
+                return
+            self.returning_token = None
+            success, error = self.checkin_api(fob['fob_id'], checkout_id=checkout_id)
+            if not success:
+                self.show_error(f"Check-in failed: {error}")
+                return
+            self.notify_server()
+            self.show_checkin_success(fob['vehicle_name'], label)
+            self.current_user = None
+
+        for h in candidates:
+            label = self.holder_label(h)
+            tk.Button(self.message_frame, text=label, font=font.Font(size=20, weight='bold'),
+                      bg='#2196F3', fg='white', width=34, height=1,
+                      command=lambda cid=h['checkout_id'], lb=label: finish(cid, lb)).pack(pady=5)
+
+        if len(candidates) > 1:
+            tk.Button(self.message_frame, text="Return all", font=font.Font(size=18, weight='bold'),
+                      bg='#4CAF50', fg='white', width=20, height=1,
+                      command=lambda: finish(None, "everyone")).pack(pady=(15, 5))
+        tk.Button(self.message_frame, text="Cancel", font=font.Font(size=16),
+                  bg='#666666', fg='white', width=12,
+                  command=lambda: (setattr(self, 'returning_token', None), self.show_welcome())
+                  ).pack(pady=(5, 0))
+
+        self.instructions_label.config(text="Tap who is returning these keys")
+
+        def timeout():
+            if self.returning_token is token:
+                self.returning_token = None
+                self.show_welcome()
+        self.root.after(30000, timeout)
+
     def handle_fob_scan(self, fob_id):
         """Handle a fob scan"""
         # Check if in manage-reservation mode, waiting for the item to scan
@@ -2782,6 +2891,11 @@ class KioskGUI:
                     return
                     
         
+        # Keys can have several holders: add / return one holder at a time
+        if fob.get('category') in self.MULTI_HOLDER_CATEGORIES and fob.get('holders'):
+            self.handle_multi_holder_scan(fob)
+            return
+
         # Check if it's currently checked out (lookup API already includes this info)
         checkout = None
         if fob.get('checkout_id'):

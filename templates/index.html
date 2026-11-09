@@ -399,7 +399,8 @@ body {
         <button class="tab" data-category="Discontinued">🚫 Discontinued</button>
     </div>
 
-    <div class="tab-content" id="All-content">
+    {% macro holder_block(key) %}{% if key.holders and key.holders|length > 1 %}<strong>Held by {{ key.holders|length }}:</strong>{% for h in key.holders %}<div style="margin-top:6px;"><span class="checkout-name">{% if h.vendor_name %}🔧 {{ h.vendor_name }} (via {{ h.first_name }}){% else %}{{ h.first_name }} {{ h.last_name }}{% endif %}</span><br><small>Since {{ h.checked_out_at }}</small>{% if h.property_note %}<br><small>📍 {{ h.property_note }}</small>{% endif %}</div>{% endfor %}{% else %}<strong>Checked out to:</strong><br><span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br><small>Since {{ key.checked_out_at }}</small>{% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}{% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}{% endif %}{% endmacro %}
+<div class="tab-content" id="All-content">
     <div class="grid">
         {% for key in all_items %}
         <div class="key-card {% if key.checkout_id %}checked-out{% elif key.is_available == 0 %}unavailable{% else %}available{% endif %}">
@@ -407,10 +408,7 @@ body {
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
                 <div class="status checked-out">
-                    <strong>Checked out to:</strong><br>
-                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
-                    <small>Since {{ key.checked_out_at }}</small>
-                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}{% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
+                    {{ holder_block(key) }}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -458,10 +456,7 @@ body {
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
                 <div class="status checked-out">
-                    <strong>Checked out to:</strong><br>
-                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
-                    <small>Since {{ key.checked_out_at }}</small>
-                    {% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
+                    {{ holder_block(key) }}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -509,10 +504,7 @@ body {
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
                 <div class="status checked-out">
-                    <strong>Checked out to:</strong><br>
-                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
-                    <small>Since {{ key.checked_out_at }}</small>
-                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}{% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
+                    {{ holder_block(key) }}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -560,10 +552,7 @@ body {
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
                 <div class="status checked-out">
-                    <strong>Checked out to:</strong><br>
-                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
-                    <small>Since {{ key.checked_out_at }}</small>
-                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}{% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
+                    {{ holder_block(key) }}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -611,10 +600,7 @@ body {
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
                 <div class="status checked-out">
-                    <strong>Checked out to:</strong><br>
-                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
-                    <small>Since {{ key.checked_out_at }}</small>
-                    {% if key.property_note %}<br><small>📍 {{ key.property_note }}</small>{% endif %}{% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
+                    {{ holder_block(key) }}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -662,10 +648,7 @@ body {
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
                 <div class="status checked-out">
-                    <strong>Checked out to:</strong><br>
-                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
-                    <small>Since {{ key.checked_out_at }}</small>
-                    {% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
+                    {{ holder_block(key) }}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -713,10 +696,7 @@ body {
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
                 <div class="status checked-out">
-                    <strong>Checked out to:</strong><br>
-                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
-                    <small>Since {{ key.checked_out_at }}</small>
-                    {% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
+                    {{ holder_block(key) }}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -764,10 +744,7 @@ body {
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
                 <div class="status checked-out">
-                    <strong>Checked out to:</strong><br>
-                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
-                    <small>Since {{ key.checked_out_at }}</small>
-                    {% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
+                    {{ holder_block(key) }}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -815,10 +792,7 @@ body {
             <div class="vehicle-name">{{ key.vehicle_name }}</div>
             {% if key.checkout_id %}
                 <div class="status checked-out">
-                    <strong>Checked out to:</strong><br>
-                    <span class="checkout-name">{{ key.first_name }} {{ key.last_name }}</span><br>
-                    <small>Since {{ key.checked_out_at }}</small>
-                    {% if key.vendor_name %}<br><small>🔧 Vendor: {{ key.vendor_name }}</small>{% endif %}
+                    {{ holder_block(key) }}
                 </div>
             {% elif key.is_available == 0 %}
                 <div class="status unavailable">
@@ -1003,6 +977,20 @@ body {
             }).join('');
         }
         
+                function holderBlock(key) {
+            const hs = key.holders || [];
+            if (hs.length > 1) {
+                return `<strong>Held by ${hs.length}:</strong>` + hs.map(h => `
+                    <div style="margin-top:6px;"><span class="checkout-name">${h.vendor_name ? `🔧 ${h.vendor_name} (via ${h.first_name})` : `${h.first_name} ${h.last_name}`}</span><br>
+                    <small>Since ${h.checked_out_at}</small>${h.property_note ? `<br><small>📍 ${h.property_note}</small>` : ''}</div>`).join('');
+            }
+            return `<strong>Checked out to:</strong><br>
+                ${key.first_name} ${key.last_name}<br>
+                <small>Since ${key.checked_out_at}</small>
+                ${key.property_note ? `<br><small>📍 ${key.property_note}</small>` : ''}
+                ${key.vendor_name ? `<br><small>🔧 Vendor: ${key.vendor_name}</small>` : ''}`;
+        }
+
         function updateSection(category, items, showCategoryBadge) {
             if (!items) return; // Skip if no data
             
@@ -1019,11 +1007,7 @@ body {
                     <div class="vehicle-name">${key.vehicle_name}</div>
                     ${key.checkout_id ? `
                         <div class="status checked-out">
-                            <strong>Checked out to:</strong><br>
-                            ${key.first_name} ${key.last_name}<br>
-                            <small>Since ${key.checked_out_at}</small>
-                            ${key.property_note ? `<br><small>📍 ${key.property_note}</small>` : ''}
-                            ${key.vendor_name ? `<br><small>🔧 Vendor: ${key.vendor_name}</small>` : ''}
+                            ${holderBlock(key)}
                         </div>
                     ` : `
                         <div class="status available">
