@@ -31,6 +31,7 @@ class KioskGUI:
         self.note_mode = False
         self.bulk_checkout_mode = False
         self.vendor_mode = False
+        self.more_frame = None
         self.bulk_items = []
         self.add_new_mode = False
 
@@ -1078,15 +1079,22 @@ class KioskGUI:
         self.pending_reservation_fob = None
         self.manage_reservation_mode = False
     
-        # Big icon/emoji
-        icon_label = tk.Label(
-            self.message_frame,
-            text="🔑",
-            font=font.Font(size=120),
-            fg='white',
-            bg='black'
-        )
-        icon_label.pack(pady=(50, 20))
+        # River Rock logo (falls back to the key emoji if the file is missing)
+        self.more_frame = None
+        logo_label = None
+        try:
+            logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'riverrock_logo.png')
+            self.logo_img = tk.PhotoImage(file=logo_path)
+            logo_label = tk.Label(self.message_frame, image=self.logo_img, bg='black')
+        except Exception:
+            logo_label = tk.Label(
+                self.message_frame,
+                text="🔑",
+                font=font.Font(size=120),
+                fg='white',
+                bg='black'
+            )
+        logo_label.pack(pady=(30, 20))
     
         # Main instruction
         msg_label = tk.Label(
@@ -1128,42 +1136,12 @@ class KioskGUI:
         )
         vendor_btn.pack(side='left', padx=10)
 
-        # Button container - Second row
+        # Button container - Second row (log-only modes: Stock Parts / Cut Keys)
         button_frame2 = tk.Frame(self.message_frame, bg='black')
         button_frame2.pack(pady=10)
-    
-        # Add Note button
-        note_btn = tk.Button(
-            button_frame2,
-            text="📝 Add Note",
-            font=font.Font(size=16, weight='bold'),
-            bg='#2196F3',
-            fg='white',
-            width=15,
-            height=2,
-            command=self.add_note
-        )
-        note_btn.pack(side='left', padx=10)
-
-        # Add New button
-        add_new_btn = tk.Button(
-            button_frame2,
-            text="➕ Add New",
-            font=font.Font(size=16, weight='bold'),
-            bg='#009688',
-            fg='white',
-            width=15,
-            height=2,
-            command=self.start_add_new
-        )
-        add_new_btn.pack(side='left', padx=10)
-
-        # Button container - Third row (log-only modes: Stock Parts / Cut Keys)
-        button_frame3 = tk.Frame(self.message_frame, bg='black')
-        button_frame3.pack(pady=10)
 
         stock_out_btn = tk.Button(
-            button_frame3,
+            button_frame2,
             text="📤 Stock Parts Out",
             font=font.Font(size=16, weight='bold'),
             bg='#795548',
@@ -1175,7 +1153,7 @@ class KioskGUI:
         stock_out_btn.pack(side='left', padx=10)
 
         stock_in_btn = tk.Button(
-            button_frame3,
+            button_frame2,
             text="📥 Stock Parts In",
             font=font.Font(size=16, weight='bold'),
             bg='#8D6E63',
@@ -1187,7 +1165,7 @@ class KioskGUI:
         stock_in_btn.pack(side='left', padx=10)
 
         cut_key_btn = tk.Button(
-            button_frame3,
+            button_frame2,
             text="✂️ Cut Key",
             font=font.Font(size=16, weight='bold'),
             bg='#607D8B',
@@ -1198,65 +1176,21 @@ class KioskGUI:
         )
         cut_key_btn.pack(side='left', padx=10)
 
-        # Button container - Fourth row (replace lost/broken fobs and cards)
-        button_frame4 = tk.Frame(self.message_frame, bg='black')
-        button_frame4.pack(pady=10)
+        # Button container - Third row: More (second page of less-used actions)
+        button_frame3 = tk.Frame(self.message_frame, bg='black')
+        button_frame3.pack(pady=10)
 
-        # Replace Equipment Fob button
-        fob_btn = tk.Button(
-            button_frame4,
-            text="🔑 Replace Equipment Fob",
+        more_btn = tk.Button(
+            button_frame3,
+            text="⋯ More",
             font=font.Font(size=16, weight='bold'),
-            bg='#FF9800',
+            bg='#455A64',
             fg='white',
-            width=20,
+            width=16,
             height=2,
-            command=self.replace_fob
+            command=self.show_more_menu
         )
-        fob_btn.pack(side='left', padx=10)
-
-        # Replace Employee Fob button
-        card_btn = tk.Button(
-            button_frame4,
-            text="💳 Replace Employee Fob",
-            font=font.Font(size=16, weight='bold'),
-            bg='#9C27B0',
-            fg='white',
-            width=20,
-            height=2,
-            command=self.replace_card
-        )
-        card_btn.pack(side='left', padx=10)
-
-        # Button container - Fifth row
-        button_frame5 = tk.Frame(self.message_frame, bg='black')
-        button_frame5.pack(pady=10)
-
-        # Reserve button
-        reserve_btn = tk.Button(
-            button_frame5,
-            text="📅 Reserve",
-            font=font.Font(size=16, weight='bold'),
-            bg='#3F51B5',
-            fg='white',
-            width=15,
-            height=2,
-            command=self.start_reservation
-        )
-        reserve_btn.pack(side='left', padx=10)
-
-        # Edit/Cancel Reservation button
-        manage_reservation_btn = tk.Button(
-            button_frame5,
-            text="✏️ Edit/Cancel Reservation",
-            font=font.Font(size=16, weight='bold'),
-            bg='#5C6BC0',
-            fg='white',
-            width=22,
-            height=2,
-            command=self.start_manage_reservation
-        )
-        manage_reservation_btn.pack(side='left', padx=10)
+        more_btn.pack(side='left', padx=10)
 
         # Instructions
         self.entry.focus_set()
@@ -1264,6 +1198,48 @@ class KioskGUI:
         self.instructions_label.config(text="Press ESC to reset • F11/F12 for fullscreen")
         
     
+    def show_more_menu(self):
+        """Second page of the main screen: less-used actions."""
+        self.clear_message_frame()
+
+        tk.Label(self.message_frame, text="More Options",
+                 font=self.header_font, fg='white', bg='black').pack(pady=(60, 30))
+
+        self.more_frame = tk.Frame(self.message_frame, bg='black')
+        self.more_frame.pack()
+        frame = self.more_frame
+
+        def make_btn(parent, text, color, command, width=22):
+            return tk.Button(parent, text=text, font=font.Font(size=16, weight='bold'),
+                             bg=color, fg='white', width=width, height=2, command=command)
+
+        row1 = tk.Frame(frame, bg='black')
+        row1.pack(pady=10)
+        make_btn(row1, "📝 Add Note", '#2196F3', self.add_note).pack(side='left', padx=10)
+        make_btn(row1, "➕ Add New", '#009688', self.start_add_new).pack(side='left', padx=10)
+
+        row2 = tk.Frame(frame, bg='black')
+        row2.pack(pady=10)
+        make_btn(row2, "📅 Reserve", '#3F51B5', self.start_reservation).pack(side='left', padx=10)
+        make_btn(row2, "✏️ Edit/Cancel Reservation", '#5C6BC0', self.start_manage_reservation).pack(side='left', padx=10)
+
+        row3 = tk.Frame(frame, bg='black')
+        row3.pack(pady=(30, 10))
+        make_btn(row3, "⬅ Back", '#666666', self.show_welcome, width=16).pack()
+
+        self.entry.focus_set()
+        self.instructions_label.config(text="Returns to the main screen after 60 seconds of inactivity")
+
+        # Inactivity: go back to the main screen if this page is still showing
+        shown_frame = frame
+        def back_if_idle():
+            try:
+                if self.more_frame is shown_frame and shown_frame.winfo_exists():
+                    self.show_welcome()
+            except Exception:
+                pass
+        self.root.after(60000, back_if_idle)
+
     def start_vendor_checkout(self):
         """Start Vendor Checkout: same scan flow as Checkout, but the checkout
         is recorded under the staff member with a vendor name attached."""

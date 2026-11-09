@@ -236,7 +236,7 @@ def index():
     tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], key=checkout_first_key)
     cleaning = sorted([k for k in formatted_keys if k['category'] == 'Cleaning'], key=natural_sort_key)
     vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'], key=natural_sort_key)
-    keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=natural_sort_key)
+    keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=checkout_first_key)
     lock_box = sorted([k for k in formatted_keys if k['category'] == 'Lock Box'], key=natural_sort_key)
     signs = sorted([k for k in formatted_keys if k['category'] == 'Signs'], key=natural_sort_key)
 
@@ -398,7 +398,7 @@ def get_current_status():
     tools = sorted([k for k in formatted_keys if k['category'] == 'Tools'], key=checkout_first_key)
     cleaning = sorted([k for k in formatted_keys if k['category'] == 'Cleaning'], key=natural_sort_key)
     vehicles = sorted([k for k in formatted_keys if k['category'] == 'Vehicles'], key=natural_sort_key)
-    keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=natural_sort_key)
+    keys = sorted([k for k in formatted_keys if k['category'] == 'Keys'], key=checkout_first_key)
     lock_box = sorted([k for k in formatted_keys if k['category'] == 'Lock Box'], key=natural_sort_key)
     signs = sorted([k for k in formatted_keys if k['category'] == 'Signs'], key=natural_sort_key)
 
