@@ -402,6 +402,16 @@
 <div class="tab-content" id="Key Fobs-content">
     <button onclick="showAddFobForm()" class="btn btn-success" style="margin-bottom: 15px;">+ Add New Key Fob</button>
 
+    <div style="margin: 5px 0 20px 0;">
+        <label for="fobCategoryFilter" style="font-weight: bold; font-size: 1.2em; margin-right: 8px;">Filter by Category:</label>
+        <select id="fobCategoryFilter" onchange="filterFobsByCategory()" style="padding: 10px 14px; font-size: 1.1em; border: 1px solid #ccc; border-radius: 6px; min-width: 260px;">
+            <option value="">All Categories</option>
+            {% for cat in fobs|map(attribute='category')|select|unique|sort %}
+            <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
     <div id="addFobForm" style="display: none; background: #f5f5f5; padding: 20px; margin-bottom: 20px; border-radius: 5px;">
         <h3>Add New Key Fob</h3>
         <form action="/admin/fob/add" method="POST">
@@ -412,7 +422,6 @@
                     <option value="">-- Select Category --</option>
                     <option value="Keys">Keys</option>
                     <option value="Vehicles">Vehicles</option>
-                    <option value="Equipment">Equipment</option>
                     <option value="Tools">Tools</option>
                     <option value="Rentables">Rentables</option>
                     <option value="Lock Box">Lock Box</option>
@@ -439,7 +448,7 @@
             <th>Actions</th>
         </tr>
         {% for fob in fobs %}
-        <tr {% if not fob.is_active %}class="inactive"{% endif %}>
+        <tr data-category="{{ fob.category }}" {% if not fob.is_active %}class="inactive"{% endif %}>
             <td>{{ fob.fob_id }}</td>
             <td>{{ fob.vehicle_name }}</td>
             <td>{{ fob.category }}</td>
@@ -958,6 +967,24 @@
         function hideAddUserForm() {
             document.getElementById('addUserForm').style.display = 'none';
         }
+        function filterFobsByCategory() {
+            const sel = document.getElementById('fobCategoryFilter');
+            if (!sel) return;
+            const chosen = sel.value;
+            document.querySelectorAll('#Key\\ Fobs-content tr[data-category]').forEach(row => {
+                row.style.display = (!chosen || row.dataset.category === chosen) ? '' : 'none';
+            });
+            try { localStorage.setItem('admin_fob_category_filter', chosen); } catch (e) {}
+        }
+        window.addEventListener('load', () => {
+            const sel = document.getElementById('fobCategoryFilter');
+            if (!sel) return;
+            try {
+                const saved = localStorage.getItem('admin_fob_category_filter') || '';
+                if ([...sel.options].some(o => o.value === saved)) sel.value = saved;
+            } catch (e) {}
+            filterFobsByCategory();
+        });
         function showAddFobForm() {
             document.getElementById('addFobForm').style.display = 'block';
         }
