@@ -8,7 +8,7 @@ RFID-based self-service checkout system for tracking keys and equipment. Staff s
 - RFID-Based: Fast checkout using employee keycards and equipment fobs
 - Self-Registering: New employees and items register automatically on first scan
 - Checkout: Scan one card, then scan one or more items and tap Done
-- Vendor Checkout: Staff check out key-box fobs on behalf of a vendor; the vendor's name is recorded once per checkout and shown on the dashboard, in checkout history, and in the CSV export
+- Vendor Key Checkout: Staff check out key-box fobs on behalf of a vendor; the vendor's name is recorded once per checkout and shown on the dashboard, in checkout history, and in the CSV export
 - Card/Fob Replacement: Replace lost or damaged keycards and fobs
 - Notes System: Add warnings or reminders with optional expiration dates
 - Live Dashboard: Updates in real-time via WebSockets
@@ -108,7 +108,7 @@ The kiosk shows a logo on its main screen if `riverrock_logo.png` is in the same
 The main screen is kept simple for day-to-day use:
 
 - Checkout
-- Vendor Checkout
+- Vendor Key Checkout
 - Stock Parts Out
 - Stock Parts In
 - Cut Key
@@ -116,7 +116,7 @@ The main screen is kept simple for day-to-day use:
 
 Replacing a lost or broken equipment fob or employee fob is done from the admin panel, not the kiosk.
 
-On the dashboard, checked-out items are listed first in the Keys, Rentables, and Tools tabs.
+On the dashboard, checked-out items are listed first in the Keys, Rentables, and Tools tabs. Checked-out Keys are left off the All tab (they still show on the Keys tab) so it doesn't look like no keys are available.
 
 ## Kiosk Controls
 
@@ -124,20 +124,20 @@ On the dashboard, checked-out items are listed first in the Keys, Rentables, and
 - F11: Enter fullscreen
 - F12: Exit fullscreen
 
-## Vendor Checkout
+## Vendor Key Checkout
 
 When a vendor is taking a key from the key box:
 
-1. Tap Vendor Checkout on the kiosk main screen
+1. Tap Vendor Key Checkout on the kiosk main screen
 2. Scan your own keycard
 3. Scan each key-box fob the vendor is taking
 4. Tap Done and enter the vendor's name once (required; it applies to every fob in that checkout)
 
-The items are recorded under the staff member's name with the vendor name attached (the checkouts.vendor_name column, added automatically on startup). Scanning a fob the regular way from the main screen does not ask for a vendor, so staff must tap Vendor Checkout first. Items are checked back in by scanning them as usual.
+The items are recorded under the staff member's name with the vendor name attached (the checkouts.vendor_name column, added automatically on startup). Scanning a fob the regular way from the main screen does not ask for a vendor, so staff must tap Vendor Key Checkout first. Items are checked back in by scanning them as usual.
 
 ### Several vendors, same property (Keys)
 
-Keys fobs can be held by more than one person at once, so two vendors can each take the key for the same property drawer. A regular or Vendor Checkout of a Keys fob that is already out simply adds another holder. The dashboard shows one card per fob listing every holder. When a fob with more than one holder is scanned to return it, the kiosk asks who is returning (tap a name, or Return all); a fob with a single holder checks in immediately. Other categories keep the old behavior (a second checkout is a handoff).
+Keys fobs can be held by more than one person at once, so two vendors can each take the key for the same property drawer. A regular or Vendor Key Checkout of a Keys fob that is already out simply adds another holder. The dashboard shows one card per fob listing every holder. When a fob with more than one holder is scanned to return it, the kiosk asks who is returning (tap a name, or Return all); a fob with a single holder checks in immediately. Other categories keep the old behavior (a second checkout is a handoff).
 
 ## Customizing Categories
 

@@ -281,9 +281,12 @@ def index():
     # "All" tab - everything except Stock Parts, Discontinued, Cut Keys
     # (those two aren't even fob-based categories; Discontinued excluded
     # intentionally). Checked-out items rise to the top here too.
+    # Checked-out Keys are left off the All tab (they still show on the Keys
+    # tab) so techs don't read a pile of checked-out keys as "no keys available".
     all_items = sorted(
         [k for k in formatted_keys if k['category'] in
-         ('Keys', 'Rentables', 'Tools', 'Vehicles', 'Lock Box', 'Cleaning', 'Signs')],
+         ('Keys', 'Rentables', 'Tools', 'Vehicles', 'Lock Box', 'Cleaning', 'Signs')
+         and not (k['category'] == 'Keys' and k.get('checkout_id'))],
         key=checkout_first_key
     )
 
@@ -446,9 +449,12 @@ def get_current_status():
     lock_box = sorted([k for k in formatted_keys if k['category'] == 'Lock Box'], key=natural_sort_key)
     signs = sorted([k for k in formatted_keys if k['category'] == 'Signs'], key=natural_sort_key)
 
+    # Checked-out Keys are left off the All tab (they still show on the Keys
+    # tab) so techs don't read a pile of checked-out keys as "no keys available".
     all_items = sorted(
         [k for k in formatted_keys if k['category'] in
-         ('Keys', 'Rentables', 'Tools', 'Vehicles', 'Lock Box', 'Cleaning', 'Signs')],
+         ('Keys', 'Rentables', 'Tools', 'Vehicles', 'Lock Box', 'Cleaning', 'Signs')
+         and not (k['category'] == 'Keys' and k.get('checkout_id'))],
         key=checkout_first_key
     )
 

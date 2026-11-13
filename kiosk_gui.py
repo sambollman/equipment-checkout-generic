@@ -1123,20 +1123,20 @@ class KioskGUI:
             font=font.Font(size=16, weight='bold'),
             bg='#4CAF50',
             fg='white',
-            width=18,
+            width=22,
             height=2,
             command=self.start_bulk_checkout
         )
         bulk_btn.pack(side='left', padx=10)
 
-        # Vendor Checkout button - staff checks out blue key-box fobs on behalf of a vendor
+        # Vendor Key Checkout button - staff checks out blue key-box fobs on behalf of a vendor
         vendor_btn = tk.Button(
             button_frame1,
-            text="🔧 Vendor Checkout",
+            text="🔧 Vendor Key Checkout",
             font=font.Font(size=16, weight='bold'),
             bg='#FF9800',
             fg='white',
-            width=18,
+            width=22,
             height=2,
             command=self.start_vendor_checkout
         )
@@ -1259,12 +1259,12 @@ class KioskGUI:
         self.root.after(60000, back_if_idle)
 
     def start_vendor_checkout(self):
-        """Start Vendor Checkout: same scan flow as Checkout, but the checkout
+        """Start Vendor Key Checkout: same scan flow as Checkout, but the checkout
         is recorded under the staff member with a vendor name attached."""
         self.start_bulk_checkout(vendor=True)
 
     def start_bulk_checkout(self, vendor=False):
-        """Start Checkout mode (multi-item). vendor=True -> Vendor Checkout."""
+        """Start Checkout mode (multi-item). vendor=True -> Vendor Key Checkout."""
         self.pending_fob = None
         self.bulk_checkout_mode = True
         self.vendor_mode = vendor
@@ -1282,7 +1282,7 @@ class KioskGUI:
         
         msg_label = tk.Label(
             self.message_frame,
-            text=("Vendor Checkout\n\nScan YOUR keycard first" if self.vendor_mode else "Checkout\n\nScan your keycard or first item"),
+            text=("Vendor Key Checkout\n\nScan YOUR keycard first" if self.vendor_mode else "Checkout\n\nScan your keycard or first item"),
             font=self.header_font,
             fg='#4CAF50',
             bg='black',
@@ -1315,9 +1315,9 @@ class KioskGUI:
         
         # Header
         if self.current_user:
-            header_text = f"{'🔧 Vendor Checkout' if self.vendor_mode else '🛒 Checkout'} - {self.current_user['first_name']} {self.current_user['last_name']}"
+            header_text = f"{'🔧 Vendor Key Checkout' if self.vendor_mode else '🛒 Checkout'} - {self.current_user['first_name']} {self.current_user['last_name']}"
         else:
-            header_text = "🔧 Vendor Checkout" if self.vendor_mode else "🛒 Checkout"
+            header_text = "🔧 Vendor Key Checkout" if self.vendor_mode else "🛒 Checkout"
 
         header_label = tk.Label(
             self.message_frame,
@@ -1572,7 +1572,7 @@ class KioskGUI:
         was_vendor = self.vendor_mode
         if self.vendor_mode:
             # Vendor name asked ONCE for the whole batch; required.
-            vendor_name = (self.get_text_input("Vendor name\n(who is taking the key(s)?)", title="Vendor Checkout") or '').strip()
+            vendor_name = (self.get_text_input("Vendor name\n(who is taking the key(s)?)", title="Vendor Key Checkout") or '').strip()
             self.last_scan_time = datetime.now()
             if not vendor_name:
                 # Cancelled/blank - stay on the scanning screen so nothing is lost
@@ -1614,7 +1614,7 @@ class KioskGUI:
         tk.Label(self.message_frame, text="✅", font=font.Font(size=100), 
               fg='#4CAF50', bg='black').pack(pady=(30, 20))
         
-        tk.Label(self.message_frame, text=("Vendor Checkout Complete!" if was_vendor else "Checkout Complete!"), 
+        tk.Label(self.message_frame, text=("Vendor Key Checkout Complete!" if was_vendor else "Checkout Complete!"), 
               font=self.header_font, fg='#4CAF50', bg='black').pack(pady=(0, 20))
         
         tk.Label(self.message_frame, text=f"{len(checked_out_items)} item(s) checked out", 
